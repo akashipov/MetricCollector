@@ -47,6 +47,7 @@ func Update(w http.ResponseWriter, request *http.Request) {
 		contentType := request.Header.Get("Content-Type")
 		elements := strings.Split(request.URL.Path, "/")
 		if contentType != "text/plain" {
+			w.WriteHeader(http.StatusBadRequest)
 			status, err := w.Write(
 				[]byte("Request doesn't contain correct Content-Type"),
 			)
