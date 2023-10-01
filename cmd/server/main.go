@@ -92,7 +92,7 @@ func Update(w http.ResponseWriter, request *http.Request) {
 				}
 			}
 			w.WriteHeader(http.StatusOK)
-			status, err := w.Write([]byte(fmt.Sprintf("updated mapMetricGauge: %s", mapMetricGauge)))
+			status, err := w.Write([]byte(fmt.Sprintf("updated mapMetricGauge: %v", mapMetricGauge)))
 			if err != nil {
 				panic(fmt.Sprintf("%s: %v", err.Error(), status))
 			}
@@ -120,7 +120,7 @@ func Update(w http.ResponseWriter, request *http.Request) {
 				}
 			}
 			w.WriteHeader(http.StatusOK)
-			status, err := w.Write([]byte(fmt.Sprintf("updated mapMetricCounter: %s", mapMetricCounter)))
+			status, err := w.Write([]byte(fmt.Sprintf("updated mapMetricCounter: %v", mapMetricCounter)))
 			if err != nil {
 				panic(fmt.Sprintf("%s: %v", err.Error(), status))
 			}
