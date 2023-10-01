@@ -44,18 +44,18 @@ func main() {
 
 func Update(w http.ResponseWriter, request *http.Request) {
 	if request.Method == http.MethodPost {
-		contentType := request.Header.Get("Content-Type")
+		//contentType := request.Header.Get("Content-Type")
 		elements := strings.Split(request.URL.Path, "/")
-		if contentType != "text/plain" {
-			w.WriteHeader(http.StatusBadRequest)
-			status, err := w.Write(
-				[]byte("Request doesn't contain correct Content-Type"),
-			)
-			if err != nil {
-				panic(fmt.Sprintf("%s: %v", err.Error(), status))
-			}
-			return
-		}
+		//if contentType != "text/plain" {
+		//	w.WriteHeader(http.StatusBadRequest)
+		//	status, err := w.Write(
+		//		[]byte("Request doesn't contain correct Content-Type"),
+		//	)
+		//	if err != nil {
+		//		panic(fmt.Sprintf("%s: %v", err.Error(), status))
+		//	}
+		//	return
+		//}
 		if len(elements) != 5 {
 			w.WriteHeader(http.StatusNotFound)
 			status, err := w.Write(
