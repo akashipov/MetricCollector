@@ -23,7 +23,7 @@ func (r *CustomResponseWriter) Write(bytes []byte) (int, error) {
 		r.header = make(map[string][]string)
 	}
 	record := string(bytes)
-	r.header["record"] = []string{record}
+	r.header["Record"] = []string{record}
 	return len(record), nil
 }
 
@@ -32,7 +32,7 @@ func (r *CustomResponseWriter) WriteHeader(statusCode int) {
 		r.header = make(map[string][]string)
 	}
 	statusCodeStr := fmt.Sprintf("%v", statusCode)
-	r.header["statusCode"] = []string{statusCodeStr}
+	r.header["Status-Code"] = []string{statusCodeStr}
 }
 
 func (r *CustomResponseWriter) Header() http.Header {
@@ -120,10 +120,10 @@ func TestSaveMetric(t *testing.T) {
 				SaveMetric(tt.args.w, tt.args.metric, tt.args.metricName)
 			}
 			header := customWriter.Header()
-			assert.EqualValues(t, header["statusCode"], tt.wantStatusCode)
+			assert.EqualValues(t, header["Status-Code"], tt.wantStatusCode)
 			assert.Contains(
 				t,
-				header["record"][0],
+				header["Record"][0],
 				tt.wantAnswer,
 			)
 			f, err := os.ReadFile(filepath.Join(os.Getenv(BaseDirEnv), "map.txt"))
@@ -243,10 +243,10 @@ func TestUpdate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			Update(tt.args.w, tt.args.request)
 			header := customWriter.Header()
-			assert.EqualValues(t, tt.wantStatusCode, header["statusCode"][0])
+			assert.EqualValues(t, tt.wantStatusCode, header["Status-Code"][0])
 			assert.Contains(
 				t,
-				header["record"][0],
+				header["Record"][0],
 				tt.wantAnswer,
 			)
 		})

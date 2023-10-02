@@ -80,8 +80,14 @@ func (r MetricSender) SendMetric(value interface{}, metricType string, metricNam
 		"text/plain",
 		strings.NewReader(""),
 	)
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			panic(err.Error())
+		}
+	}()
 	if err != nil {
-		fmt.Println(fmt.Sprintf("Request cannot be precossed: %s", err.Error()))
+		fmt.Printf("Request cannot be precossed: %s\n", err.Error())
 		panic(err.Error())
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
@@ -105,5 +111,5 @@ func (r MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int) {
 	}
 	r.SendMetric(countOfUpdate, COUNTER, "PollCount")
 	r.SendMetric(rand.Float64(), GAUGE, "RandomValue")
-	fmt.Println(fmt.Sprintf("All metrics successfully sent"))
+	fmt.Println("All metrics successfully sent")
 }
