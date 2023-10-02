@@ -13,7 +13,6 @@ func TestMetricSender_PollInterval(t *testing.T) {
 	type fields struct {
 		ListMetrics *[]string
 	}
-	fmt.Println("mocking server")
 	tests := []struct {
 		name   string
 		fields fields
@@ -28,6 +27,7 @@ func TestMetricSender_PollInterval(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := ""
+			fmt.Println("mocking server")
 			server := httptest.NewServer(
 				http.HandlerFunc(
 					func(w http.ResponseWriter, request *http.Request) {
@@ -64,15 +64,46 @@ func TestMetricSender_ReportInterval(t *testing.T) {
 		fields fields
 		args   args
 	}{
-		// TODO: Add test cases.
+		{
+			name: "1",
+			fields: fields{
+				&[]string{
+					"Alloc", "Sys",
+				},
+			},
+			args: args{
+				a: &runtime.MemStats{
+					Alloc:   1245,
+					Sys:     544,
+					Lookups: 10,
+				},
+				countOfUpdate: 5,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			s := ""
+			fmt.Println("mocking server")
+			server := httptest.NewServer(
+				http.HandlerFunc(
+					func(w http.ResponseWriter, request *http.Request) {
+						s += fmt.Sprintf("%v", request.URL)
+						assert.Equal(t, []string{"text/plain"}, request.Header["Content-Type"])
+					},
+				),
+			)
 			r := MetricSender{
-
+				URL:         server.URL,
 				ListMetrics: tt.fields.ListMetrics,
 			}
+			defer server.Close()
 			r.ReportInterval(tt.args.a, tt.args.countOfUpdate)
+			assert.Contains(t, s, "/update/gauge/RandomValue")
+			assert.Contains(t, s, "/update/counter/PollCount/5")
+			assert.Contains(t, s, "/update/gauge/Alloc/1245")
+			assert.Contains(t, s, "/update/gauge/Sys/544")
+			assert.NotContains(t, s, "/update/gauge/Lookups/10")
 		})
 	}
 }
