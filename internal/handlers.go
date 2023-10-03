@@ -5,6 +5,7 @@ import (
 	"github.com/go-chi/chi"
 	"net/http"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -93,8 +94,13 @@ func Update(w http.ResponseWriter, request *http.Request) {
 
 func MainPage(w http.ResponseWriter, request *http.Request) {
 	ul := "<ul>"
-	for k, v := range MapMetric.m {
-		ul += fmt.Sprintf("<li>%v: %v</li>", k, v.GetValue())
+	var keys []string
+	for k := range MapMetric.m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		ul += fmt.Sprintf("<li>%v: %v</li>", k, MapMetric.m[k].GetValue())
 	}
 	ul += "</ul>"
 	html := fmt.Sprintf("<html>%s</html>", ul)
