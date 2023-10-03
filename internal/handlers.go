@@ -4,8 +4,28 @@ import (
 	"fmt"
 	"github.com/go-chi/chi"
 	"net/http"
+	"reflect"
 	"strconv"
+	"strings"
 )
+
+func ServerRouter() chi.Router {
+	r := chi.NewRouter()
+	r.Get("/", MainPage)
+	r.Route(
+		"/update/{MetricType}/{MetricName}/{MetricValue}",
+		func(r chi.Router) {
+			r.Post("/", Update)
+		},
+	)
+	r.Route(
+		"/value/{MetricType}/{MetricName}",
+		func(r chi.Router) {
+			r.Get("/", GetMetric)
+		},
+	)
+	return r
+}
 
 func SaveMetric(w http.ResponseWriter, metric Metric, metricName string) {
 	val, ok := MapMetric.m[metricName]
@@ -71,18 +91,6 @@ func Update(w http.ResponseWriter, request *http.Request) {
 	}
 }
 
-func ServerRouter() chi.Router {
-	r := chi.NewRouter()
-	r.Get("/", MainPage)
-	r.Route(
-		"/update/{MetricType}/{MetricName}/{MetricValue}",
-		func(r chi.Router) {
-			r.Post("/", Update)
-		},
-	)
-	return r
-}
-
 func MainPage(w http.ResponseWriter, request *http.Request) {
 	ul := "<ul>"
 	for k, v := range MapMetric.m {
@@ -90,7 +98,31 @@ func MainPage(w http.ResponseWriter, request *http.Request) {
 	}
 	ul += "</ul>"
 	html := fmt.Sprintf("<html>%s</html>", ul)
+	w.WriteHeader(http.StatusOK)
 	status, err := w.Write([]byte(html))
+	if err != nil {
+		fmt.Printf("%v: %v", status, err.Error())
+	}
+}
+
+func GetMetric(w http.ResponseWriter, request *http.Request) {
+	MetricName := chi.URLParam(request, "MetricName")
+	MetricType := chi.URLParam(request, "MetricType")
+	var answer string
+	if MetricValue, ok := MapMetric.m[MetricName]; ok {
+		typeMetricValue := strings.ToLower(reflect.TypeOf(MetricValue).Elem().Name())
+		if typeMetricValue == MetricType {
+			w.WriteHeader(http.StatusOK)
+			answer = fmt.Sprintf("%v", MetricValue.GetValue())
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
+			answer = fmt.Sprintf("It has other metric type: '%s'", typeMetricValue)
+		}
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
+		answer = fmt.Sprintf("There is no metric like this: %v", MetricName)
+	}
+	status, err := w.Write([]byte(answer))
 	if err != nil {
 		fmt.Printf("%v: %v", status, err.Error())
 	}

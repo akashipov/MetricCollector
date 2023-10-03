@@ -231,3 +231,109 @@ func TestUpdate(t *testing.T) {
 		})
 	}
 }
+
+func TestGetMetric(t *testing.T) {
+	type args struct {
+		Method      string
+		URL         string
+		contentType string
+	}
+	server := httptest.NewServer(ServerRouter())
+	a := int64(10)
+	MapMetric.m = make(map[string]Metric)
+	MapMetric.m["A"] = NewCounter(&a)
+	b := float64(17)
+	MapMetric.m["B"] = NewGauge(&b)
+	defer server.Close()
+	tests := []struct {
+		name           string
+		args           args
+		wantStatusCode int
+		wantAnswer     string
+	}{
+		{
+			name: "common_counter_ok",
+			args: args{
+				Method:      http.MethodGet,
+				URL:         server.URL + "/value/counter/A",
+				contentType: "text/plain",
+			},
+			wantStatusCode: http.StatusOK,
+			wantAnswer:     "10",
+		},
+		{
+			name: "common_gauge_ok",
+			args: args{
+				Method:      http.MethodGet,
+				URL:         server.URL + "/value/gauge/B",
+				contentType: "text/plain",
+			},
+			wantStatusCode: http.StatusOK,
+			wantAnswer:     "17",
+		},
+		{
+			name: "common_gauge_wrong_type",
+			args: args{
+				Method:      http.MethodGet,
+				URL:         server.URL + "/value/counter/C",
+				contentType: "text/plain",
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantAnswer:     "There is no metric like this: C",
+		},
+		{
+			name: "common_gauge_base_dir",
+			args: args{
+				Method:      http.MethodGet,
+				URL:         server.URL,
+				contentType: "text/plain",
+			},
+			wantStatusCode: http.StatusOK,
+			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17</li></ul></html>",
+		},
+		{
+			name: "common_not_allowed_post_base",
+			args: args{
+				Method:      http.MethodPost,
+				URL:         server.URL,
+				contentType: "text/plain",
+			},
+			wantStatusCode: http.StatusMethodNotAllowed,
+			wantAnswer:     "",
+		},
+		{
+			name: "common_not_allowed_post_base",
+			args: args{
+				Method:      http.MethodPost,
+				URL:         server.URL + "/value/gauge/B",
+				contentType: "text/plain",
+			},
+			wantStatusCode: http.StatusMethodNotAllowed,
+			wantAnswer:     "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := resty.New()
+			r := c.R().ForceContentType(tt.args.contentType)
+			var resp *resty.Response
+			var err error
+			switch tt.args.Method {
+			case http.MethodPost:
+				resp, err = r.Post(tt.args.URL)
+			case http.MethodGet:
+				resp, err = r.Get(tt.args.URL)
+			}
+
+			if err != nil {
+				panic(err)
+			}
+			assert.EqualValues(t, tt.wantStatusCode, resp.StatusCode())
+			assert.Contains(
+				t,
+				resp.String(),
+				tt.wantAnswer,
+			)
+		})
+	}
+}
