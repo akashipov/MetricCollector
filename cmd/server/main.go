@@ -12,7 +12,5 @@ func main() {
 }
 
 func run() error {
-	h := http.NewServeMux()
-	h.Handle("/update/", http.HandlerFunc(internal.Update))
-	return http.ListenAndServe(`:8080`, h)
+	return http.ListenAndServe(`:8080`, internal.ServerRouter())
 }
