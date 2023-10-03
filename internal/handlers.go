@@ -115,11 +115,11 @@ func GetMetric(w http.ResponseWriter, request *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			answer = fmt.Sprintf("%v", MetricValue.GetValue())
 		} else {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(http.StatusNotFound)
 			answer = fmt.Sprintf("It has other metric type: '%s'", typeMetricValue)
 		}
 	} else {
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusNotFound)
 		answer = fmt.Sprintf("There is no metric like this: %v", MetricName)
 	}
 	status, err := w.Write([]byte(answer))

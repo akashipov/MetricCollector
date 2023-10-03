@@ -278,8 +278,18 @@ func TestGetMetric(t *testing.T) {
 				URL:         server.URL + "/value/counter/C",
 				contentType: "text/plain",
 			},
-			wantStatusCode: http.StatusBadRequest,
+			wantStatusCode: http.StatusNotFound,
 			wantAnswer:     "There is no metric like this: C",
+		},
+		{
+			name: "common_gauge_wrong_type",
+			args: args{
+				Method:      http.MethodGet,
+				URL:         server.URL + "/value/counter/B",
+				contentType: "text/plain",
+			},
+			wantStatusCode: http.StatusNotFound,
+			wantAnswer:     "It has other metric type: 'gauge'",
 		},
 		{
 			name: "common_gauge_base_dir",
