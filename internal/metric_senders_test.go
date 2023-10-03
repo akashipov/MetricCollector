@@ -45,7 +45,7 @@ func TestMetricSender_PollInterval(t *testing.T) {
 			r := MetricSender{
 				URL:         server.URL,
 				ListMetrics: tt.fields.ListMetrics,
-				client:      resty.New(),
+				Client:      resty.New(),
 			}
 			r.PollInterval(true)
 			for _, v := range ListMetrics {
@@ -102,7 +102,7 @@ func TestMetricSender_ReportInterval(t *testing.T) {
 			r := MetricSender{
 				URL:         server.URL,
 				ListMetrics: tt.fields.ListMetrics,
-				client:      resty.New(),
+				Client:      resty.New(),
 			}
 			defer server.Close()
 			r.ReportInterval(tt.args.a, tt.args.countOfUpdate)

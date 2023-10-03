@@ -51,7 +51,7 @@ const GAUGE string = "gauge"
 type MetricSender struct {
 	URL         string
 	ListMetrics *[]string
-	client      *resty.Client
+	Client      *resty.Client
 }
 
 func (r *MetricSender) PollInterval(isTestMode bool) {
@@ -74,7 +74,7 @@ func (r *MetricSender) PollInterval(isTestMode bool) {
 func (r *MetricSender) SendMetric(value interface{}, metricType string, metricName string) error {
 	url := fmt.Sprintf("%s/update/%s/%s/%v", r.URL, metricType, metricName, value)
 	fmt.Println("Sending post request with url: " + url)
-	resp, err := r.client.R().ForceContentType("text/plain").SetBody("").Post(
+	resp, err := r.Client.R().ForceContentType("text/plain").SetBody("").Post(
 		url,
 	)
 	if err != nil {
