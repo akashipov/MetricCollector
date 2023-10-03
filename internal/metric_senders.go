@@ -3,11 +3,10 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/go-resty/resty/v2"
 	"math/rand"
 	"net/http"
-	"os"
 	"runtime"
-	"strings"
 	"time"
 )
 
@@ -52,10 +51,10 @@ const GAUGE string = "gauge"
 type MetricSender struct {
 	URL         string
 	ListMetrics *[]string
+	client      *resty.Client
 }
 
-func (r MetricSender) PollInterval(isTestMode bool) {
-	fmt.Printf(BaseDirEnv + " dirname -> '" + os.Getenv(BaseDirEnv) + "'\n")
+func (r *MetricSender) PollInterval(isTestMode bool) {
 	a := runtime.MemStats{}
 	countOfUpdate := 0
 	for i := 0; i >= 0; i++ {
@@ -72,44 +71,46 @@ func (r MetricSender) PollInterval(isTestMode bool) {
 	}
 }
 
-func (r MetricSender) SendMetric(value interface{}, metricType string, metricName string) error {
+func (r *MetricSender) SendMetric(value interface{}, metricType string, metricName string) error {
 	url := fmt.Sprintf("%s/update/%s/%s/%v", r.URL, metricType, metricName, value)
 	fmt.Println("Sending post request with url: " + url)
-	resp, err := http.Post(
+	resp, err := r.client.R().ForceContentType("text/plain").SetBody("").Post(
 		url,
-		"text/plain",
-		strings.NewReader(""),
 	)
-	defer func() {
-		err := resp.Body.Close()
-		if err != nil {
-			panic(err.Error())
-		}
-	}()
 	if err != nil {
 		fmt.Printf("Request cannot be precossed: %s\n", err.Error())
-		panic(err.Error())
+		return err
 	}
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		fmt.Printf("Something wrong with '%v': status code is %v\n", resp.Body, resp.StatusCode)
+	status := resp.StatusCode()
+	if status != http.StatusOK && status != http.StatusCreated {
+		fmt.Printf("Something wrong with '%v': status code is %v\n", resp, resp.StatusCode())
 	}
 	return nil
 }
 
-func (r MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int) {
+func (r *MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int) {
 	// Cast to map our all got metrics
 	b, _ := json.Marshal(a)
 	var m map[string]interface{}
 	_ = json.Unmarshal(b, &m)
-
+	var err error
 	for _, v := range *r.ListMetrics {
-		r.SendMetric(
+		err = r.SendMetric(
 			m[v],
 			GAUGE,
 			v,
 		)
+		if err != nil {
+			panic(err)
+		}
 	}
-	r.SendMetric(countOfUpdate, COUNTER, "PollCount")
-	r.SendMetric(rand.Float64(), GAUGE, "RandomValue")
+	err = r.SendMetric(countOfUpdate, COUNTER, "PollCount")
+	if err != nil {
+		panic(err)
+	}
+	err = r.SendMetric(rand.Float64(), GAUGE, "RandomValue")
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println("All metrics successfully sent")
 }

@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
@@ -32,7 +33,11 @@ func TestMetricSender_PollInterval(t *testing.T) {
 				http.HandlerFunc(
 					func(w http.ResponseWriter, request *http.Request) {
 						s += fmt.Sprintf("%v", request.URL)
-						assert.Equal(t, []string{"text/plain"}, request.Header["Content-Type"])
+						assert.Equal(
+							t,
+							"text/plain; charset=utf-8",
+							request.Header["Content-Type"][0],
+						)
 					},
 				),
 			)
@@ -40,6 +45,7 @@ func TestMetricSender_PollInterval(t *testing.T) {
 			r := MetricSender{
 				URL:         server.URL,
 				ListMetrics: tt.fields.ListMetrics,
+				client:      resty.New(),
 			}
 			r.PollInterval(true)
 			for _, v := range ListMetrics {
@@ -89,13 +95,14 @@ func TestMetricSender_ReportInterval(t *testing.T) {
 				http.HandlerFunc(
 					func(w http.ResponseWriter, request *http.Request) {
 						s += fmt.Sprintf("%v", request.URL)
-						assert.Equal(t, []string{"text/plain"}, request.Header["Content-Type"])
+						assert.Equal(t, "text/plain; charset=utf-8", request.Header["Content-Type"][0])
 					},
 				),
 			)
 			r := MetricSender{
 				URL:         server.URL,
 				ListMetrics: tt.fields.ListMetrics,
+				client:      resty.New(),
 			}
 			defer server.Close()
 			r.ReportInterval(tt.args.a, tt.args.countOfUpdate)
