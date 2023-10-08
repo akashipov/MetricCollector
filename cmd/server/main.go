@@ -12,5 +12,6 @@ func main() {
 }
 
 func run() error {
-	return http.ListenAndServe(`:8080`, internal.ServerRouter())
+	internal.ParseArgsServer()
+	return http.ListenAndServe(*internal.HPServer, internal.ServerRouter())
 }

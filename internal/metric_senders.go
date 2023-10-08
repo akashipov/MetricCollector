@@ -49,19 +49,28 @@ const COUNTER string = "counter"
 const GAUGE string = "gauge"
 
 type MetricSender struct {
-	URL         string
-	ListMetrics *[]string
-	Client      *resty.Client
+	URL                string
+	ListMetrics        *[]string
+	Client             *resty.Client
+	ReportIntervalTime *int
+	PollIntervalTime   *int
 }
 
 func (r *MetricSender) PollInterval(isTestMode bool) {
 	a := runtime.MemStats{}
 	countOfUpdate := 0
+	t1 := time.Now()
+	t2 := time.Now()
+
 	for i := 0; i >= 0; i++ {
-		runtime.ReadMemStats(&a)
-		countOfUpdate += 1
-		time.Sleep(2 * time.Second)
-		if i%5 == 0 {
+		time.Sleep(time.Second)
+		if time.Now().Sub(t2) > time.Duration(*r.PollIntervalTime)*time.Second {
+			t2 = t2.Add(time.Duration(*r.PollIntervalTime) * time.Second)
+			runtime.ReadMemStats(&a)
+			countOfUpdate += 1
+		}
+		if time.Now().Sub(t1) > time.Duration(*r.ReportIntervalTime)*time.Second {
+			t1 = t1.Add(time.Duration(*r.ReportIntervalTime) * time.Second)
 			r.ReportInterval(&a, countOfUpdate)
 			countOfUpdate = 0
 		}
