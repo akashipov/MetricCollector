@@ -64,12 +64,12 @@ func (r *MetricSender) PollInterval(isTestMode bool) {
 
 	for i := 0; i >= 0; i++ {
 		time.Sleep(time.Second)
-		if time.Now().Sub(t2) > time.Duration(*r.PollIntervalTime)*time.Second {
+		if time.Since(t2) > time.Duration(*r.PollIntervalTime)*time.Second {
 			t2 = t2.Add(time.Duration(*r.PollIntervalTime) * time.Second)
 			runtime.ReadMemStats(&a)
 			countOfUpdate += 1
 		}
-		if time.Now().Sub(t1) > time.Duration(*r.ReportIntervalTime)*time.Second {
+		if time.Since(t1) > time.Duration(*r.ReportIntervalTime)*time.Second {
 			t1 = t1.Add(time.Duration(*r.ReportIntervalTime) * time.Second)
 			r.ReportInterval(&a, countOfUpdate)
 			countOfUpdate = 0
