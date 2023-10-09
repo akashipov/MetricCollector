@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/akashipov/MetricCollector/internal"
 	"net/http"
 )
@@ -13,5 +14,6 @@ func main() {
 
 func run() error {
 	internal.ParseArgsServer()
+	fmt.Printf("Server is running on %s...\n", *internal.HPServer)
 	return http.ListenAndServe(*internal.HPServer, internal.ServerRouter())
 }
