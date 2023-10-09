@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"github.com/caarlos0/env/v6"
@@ -42,7 +41,7 @@ func ParseArgsClient() {
 	if cfg.Address != "" {
 		sep := ":"
 		if !strings.Contains(cfg.Address, sep) {
-			panic(errors.New(fmt.Sprintf("ADDRESS should contain %s symbol to separate host and port", sep)))
+			panic(fmt.Errorf("ADDRESS should contain %s symbol to separate host and port", sep))
 		}
 		HPClient = &cfg.Address
 	}
