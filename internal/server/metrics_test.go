@@ -1,4 +1,4 @@
-package internal
+package server
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -197,9 +197,8 @@ func TestGauge_Update(t *testing.T) {
 
 func TestNewCounter(t *testing.T) {
 	type args struct {
-		v *int64
+		v int64
 	}
-	a := int64(5)
 	tests := []struct {
 		name string
 		args args
@@ -208,14 +207,14 @@ func TestNewCounter(t *testing.T) {
 		{
 			name: "value_passed",
 			args: args{
-				&a,
+				int64(5),
 			},
 			want: &Counter{5},
 		},
 		{
 			name: "nil_passed",
 			args: args{
-				nil,
+				int64(0),
 			},
 			want: &Counter{0},
 		},
@@ -231,9 +230,8 @@ func TestNewCounter(t *testing.T) {
 
 func TestNewGauge(t *testing.T) {
 	type args struct {
-		v *float64
+		v float64
 	}
-	a := float64(5)
 	tests := []struct {
 		name string
 		args args
@@ -242,14 +240,14 @@ func TestNewGauge(t *testing.T) {
 		{
 			name: "value_passed",
 			args: args{
-				&a,
+				float64(5),
 			},
 			want: &Gauge{5.0},
 		},
 		{
 			name: "nil_passed",
 			args: args{
-				nil,
+				float64(0),
 			},
 			want: &Gauge{0.0},
 		},

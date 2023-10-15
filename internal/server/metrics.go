@@ -1,4 +1,4 @@
-package internal
+package server
 
 type Metric interface {
 	Update(interface{})
@@ -17,12 +17,8 @@ func (r *Gauge) GetValue() interface{} {
 	return r.Value
 }
 
-func NewGauge(v *float64) *Gauge {
-	if v == nil {
-		return &Gauge{Value: 0}
-	} else {
-		return &Gauge{Value: *v}
-	}
+func NewGauge(v float64) *Gauge {
+	return &Gauge{Value: v}
 }
 
 type Counter struct {
@@ -37,10 +33,6 @@ func (r *Counter) Update(newValue interface{}) {
 	r.Value = r.Value + newValue.(int64)
 }
 
-func NewCounter(v *int64) *Counter {
-	if v == nil {
-		return &Counter{Value: 0}
-	} else {
-		return &Counter{Value: *v}
-	}
+func NewCounter(v int64) *Counter {
+	return &Counter{Value: v}
 }

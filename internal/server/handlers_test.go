@@ -1,4 +1,4 @@
-package internal
+package server
 
 import (
 	"fmt"
@@ -44,15 +44,10 @@ func TestSaveMetric(t *testing.T) {
 		metric     Metric
 		metricName string
 	}
-	commonValue1 := int64(10)
-	var commonMetric1 Metric = NewCounter(&commonValue1)
-	commonValue2 := int64(7)
-	var commonMetric2 Metric = NewCounter(&commonValue2)
-	commonValue3 := int64(13)
-	commonValue3R := int64(26)
-	var commonMetric3 Metric = NewCounter(&commonValue3R)
-	commonValue4 := float64(13)
-	var commonMetric4 Metric = NewGauge(&commonValue4)
+	var commonMetric1 Metric = NewCounter(int64(10))
+	var commonMetric2 Metric = NewCounter(int64(7))
+	var commonMetric3 Metric = NewCounter(int64(26))
+	var commonMetric4 Metric = NewGauge(float64(13))
 	var customWriter http.ResponseWriter = &CustomResponseWriter{}
 	tests := []struct {
 		name            string
@@ -93,7 +88,7 @@ func TestSaveMetric(t *testing.T) {
 			name: "common_counter_repeated",
 			args: args{
 				customWriter,
-				NewCounter(&commonValue3),
+				NewCounter(int64(13)),
 				"Blabla3",
 			},
 			triggerCount:    2,
@@ -241,9 +236,9 @@ func TestGetMetric(t *testing.T) {
 	server := httptest.NewServer(ServerRouter())
 	a := int64(10)
 	MapMetric.m = make(map[string]Metric)
-	MapMetric.m["A"] = NewCounter(&a)
+	MapMetric.m["A"] = NewCounter(a)
 	b := float64(17)
-	MapMetric.m["B"] = NewGauge(&b)
+	MapMetric.m["B"] = NewGauge(b)
 	defer server.Close()
 	tests := []struct {
 		name           string

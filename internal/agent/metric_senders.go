@@ -1,4 +1,4 @@
-package internal
+package agent
 
 import (
 	"encoding/json"
@@ -56,26 +56,46 @@ type MetricSender struct {
 	PollIntervalTime   *int
 }
 
-func (r *MetricSender) PollInterval(isTestMode bool) {
-	a := runtime.MemStats{}
-	countOfUpdate := 0
-	t1 := time.Now()
-	t2 := time.Now()
+func (r *MetricSender) PollIntervalCatch(
+	donePollInterval chan bool,
+) {
+	time.Sleep(time.Duration(*r.PollIntervalTime) * time.Second)
+	donePollInterval <- true
+}
 
-	for i := 0; i >= 0; i++ {
-		time.Sleep(time.Second)
-		if time.Since(t2) > time.Duration(*r.PollIntervalTime)*time.Second {
-			t2 = t2.Add(time.Duration(*r.PollIntervalTime) * time.Second)
-			runtime.ReadMemStats(&a)
+func (r *MetricSender) ReportIntervalCatch(
+	doneReportInterval chan bool,
+) {
+	time.Sleep(time.Duration(*r.ReportIntervalTime) * time.Second)
+	doneReportInterval <- true
+}
+
+func (r *MetricSender) PollInterval(isTestMode bool) {
+	memInfo := runtime.MemStats{}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	donePollInterval := make(chan bool)
+	doneReportInterval := make(chan bool)
+	countOfUpdate := 0
+	go r.PollIntervalCatch(donePollInterval)
+	go r.ReportIntervalCatch(doneReportInterval)
+	for {
+		select {
+		case <-donePollInterval:
+			runtime.ReadMemStats(&memInfo)
 			countOfUpdate += 1
-		}
-		if time.Since(t1) > time.Duration(*r.ReportIntervalTime)*time.Second {
-			t1 = t1.Add(time.Duration(*r.ReportIntervalTime) * time.Second)
-			r.ReportInterval(&a, countOfUpdate)
+			go r.PollIntervalCatch(donePollInterval)
+			fmt.Println("Done PollInterval!")
+		case <-doneReportInterval:
+			r.ReportInterval(&memInfo, countOfUpdate)
 			countOfUpdate = 0
-		}
-		if isTestMode {
-			break
+			go r.ReportIntervalCatch(doneReportInterval)
+			fmt.Println("Done ReportInterval!")
+			if isTestMode {
+				return
+			}
+		case t := <-ticker.C:
+			fmt.Println("Current time: ", t)
 		}
 	}
 }

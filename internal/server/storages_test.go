@@ -1,19 +1,17 @@
-package internal
+package server
 
 import (
-	"fmt"
 	"testing"
 )
 
 func TestMemStorage_String(t *testing.T) {
 	type fields struct {
-		m        map[string]Metric
-		Stringer fmt.Stringer
+		m map[string]Metric
 	}
 	var m int64 = 1
-	var a Metric = NewCounter(&m)
+	var a Metric = NewCounter(m)
 	m = 2
-	var b Metric = NewCounter(&m)
+	var b Metric = NewCounter(m)
 	tests := []struct {
 		name   string
 		fields fields
@@ -40,8 +38,7 @@ func TestMemStorage_String(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &MemStorage{
-				m:        tt.fields.m,
-				Stringer: tt.fields.Stringer,
+				m: tt.fields.m,
 			}
 			flag := false
 			got := r.String()

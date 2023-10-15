@@ -1,4 +1,4 @@
-package internal
+package server
 
 import (
 	"fmt"
@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -33,13 +32,7 @@ func SaveMetric(w http.ResponseWriter, metric Metric, metricName string) {
 	if ok {
 		val.Update(metric.GetValue())
 	} else {
-		if MapMetric.m == nil {
-			m := make(map[string]Metric)
-			m[metricName] = metric
-			MapMetric.m = m
-		} else {
-			MapMetric.m[metricName] = metric
-		}
+		MapMetric.m[metricName] = metric
 	}
 	w.WriteHeader(http.StatusOK)
 	status, err := w.Write([]byte(fmt.Sprintf("updated mapMetric: %v", MapMetric)))
@@ -52,44 +45,14 @@ func Update(w http.ResponseWriter, request *http.Request) {
 	MetricType := chi.URLParam(request, "MetricType")
 	MetricName := chi.URLParam(request, "MetricName")
 	MetricValue := chi.URLParam(request, "MetricValue")
-
-	// I don't know how to escape repetition of code here. Because I have 2 different type of map value
-	badTypeValueMsg := "Bad type of value passed. Please be sure that it can be converted to "
-	if MetricType == GAUGE {
-		n, err := strconv.ParseFloat(MetricValue, 64)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			status, err := w.Write([]byte(badTypeValueMsg + fmt.Sprintf("float64: '%v'", MetricValue)))
-			if err != nil {
-				panic(fmt.Sprintf("%s: %v", err.Error(), status))
-			}
-			return
-		}
-		SaveMetric(w, NewGauge(&n), MetricName)
-		return
-	} else if MetricType == COUNTER {
-		n, err := strconv.ParseInt(MetricValue, 10, 64)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			status, err := w.Write([]byte(badTypeValueMsg + fmt.Sprintf("int64: '%v'", MetricValue)))
-			if err != nil {
-				panic(fmt.Sprintf("%s: %v", err.Error(), status))
-			}
-			return
-		}
-		SaveMetric(w, NewCounter(&n), MetricName)
-		return
-	} else {
-		w.WriteHeader(http.StatusBadRequest)
-		status, err := w.Write(
-			[]byte(
-				fmt.Sprintf("Wrong type of metric: '%s'", MetricType),
-			),
-		)
-		if err != nil {
-			panic(fmt.Sprintf("%s: %v", err.Error(), status))
-		}
+	m, mName, err := ValidateMetric(&w, MetricType, MetricValue, MetricName)
+	if err != nil {
+		panic(err.Error())
 	}
+	if m == nil {
+		return
+	}
+	SaveMetric(w, m, mName)
 }
 
 func MainPage(w http.ResponseWriter, request *http.Request) {

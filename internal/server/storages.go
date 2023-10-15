@@ -1,10 +1,9 @@
-package internal
+package server
 
 import "fmt"
 
 type MemStorage struct {
 	m map[string]Metric
-	fmt.Stringer
 }
 
 func (r *MemStorage) String() string {
@@ -15,4 +14,11 @@ func (r *MemStorage) String() string {
 	return s
 }
 
-var MapMetric = MemStorage{}
+func NewStorage(vMap map[string]Metric) *MemStorage {
+	if vMap == nil {
+		return &MemStorage{map[string]Metric{}}
+	}
+	return &MemStorage{vMap}
+}
+
+var MapMetric = NewStorage(nil)
