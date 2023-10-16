@@ -13,7 +13,8 @@ func ValidateMetric(w *http.ResponseWriter, MetricType string, MetricValue strin
 	var err error
 	var status int
 	if MetricType == agent.GAUGE {
-		n, err := strconv.ParseFloat(MetricValue, 64)
+		var n float64
+		n, err = strconv.ParseFloat(MetricValue, 64)
 		if err != nil {
 			(*w).WriteHeader(http.StatusBadRequest)
 			status, err = (*w).Write([]byte(badTypeValueMsg + fmt.Sprintf("float64: '%v'", MetricValue)))
@@ -21,7 +22,8 @@ func ValidateMetric(w *http.ResponseWriter, MetricType string, MetricValue strin
 			return NewGauge(n), MetricName, nil
 		}
 	} else if MetricType == agent.COUNTER {
-		n, err := strconv.ParseInt(MetricValue, 10, 64)
+		var n int64
+		n, err = strconv.ParseInt(MetricValue, 10, 64)
 		if err != nil {
 			(*w).WriteHeader(http.StatusBadRequest)
 			status, err = (*w).Write([]byte(badTypeValueMsg + fmt.Sprintf("int64: '%v'", MetricValue)))
