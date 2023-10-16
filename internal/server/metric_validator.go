@@ -7,7 +7,7 @@ import (
 	"strconv"
 )
 
-func ValidateMetric(w *http.ResponseWriter, MetricType string, MetricValue string, MetricName string) (Metric, string, error) {
+func ValidateMetric(w *http.ResponseWriter, MetricType string, MetricValue string) (Metric, error) {
 	badTypeValueMsg := "Bad type of value passed. Please be sure that it can be converted to "
 	errFMT := "error: %s, status: %d"
 	var err error
@@ -19,7 +19,7 @@ func ValidateMetric(w *http.ResponseWriter, MetricType string, MetricValue strin
 			(*w).WriteHeader(http.StatusBadRequest)
 			status, err = (*w).Write([]byte(badTypeValueMsg + fmt.Sprintf("float64: '%v'", MetricValue)))
 		} else {
-			return NewGauge(n), MetricName, nil
+			return NewGauge(n), nil
 		}
 	} else if MetricType == agent.COUNTER {
 		var n int64
@@ -28,7 +28,7 @@ func ValidateMetric(w *http.ResponseWriter, MetricType string, MetricValue strin
 			(*w).WriteHeader(http.StatusBadRequest)
 			status, err = (*w).Write([]byte(badTypeValueMsg + fmt.Sprintf("int64: '%v'", MetricValue)))
 		} else {
-			return NewCounter(n), MetricName, nil
+			return NewCounter(n), nil
 		}
 	} else {
 		(*w).WriteHeader(http.StatusBadRequest)
@@ -39,7 +39,7 @@ func ValidateMetric(w *http.ResponseWriter, MetricType string, MetricValue strin
 		)
 	}
 	if err != nil {
-		return nil, "", fmt.Errorf(errFMT, err.Error(), status)
+		return nil, fmt.Errorf(errFMT, err.Error(), status)
 	}
-	return nil, "", nil
+	return nil, nil
 }

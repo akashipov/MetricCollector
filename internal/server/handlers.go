@@ -45,14 +45,14 @@ func Update(w http.ResponseWriter, request *http.Request) {
 	MetricType := chi.URLParam(request, "MetricType")
 	MetricName := chi.URLParam(request, "MetricName")
 	MetricValue := chi.URLParam(request, "MetricValue")
-	m, mName, err := ValidateMetric(&w, MetricType, MetricValue, MetricName)
+	m, err := ValidateMetric(&w, MetricType, MetricValue)
 	if err != nil {
 		panic(err.Error())
 	}
 	if m == nil {
 		return
 	}
-	SaveMetric(w, m, mName)
+	SaveMetric(w, m, MetricName)
 }
 
 func MainPage(w http.ResponseWriter, request *http.Request) {
