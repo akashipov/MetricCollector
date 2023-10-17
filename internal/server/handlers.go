@@ -29,13 +29,14 @@ func ServerRouter() chi.Router {
 
 func SaveMetric(w http.ResponseWriter, metric Metric, metricName string) {
 	val, ok := MapMetric.m[metricName]
+	errFMT := "error - %s: status - %v\n"
 	if ok {
 		defer func() {
 			if err := recover(); err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				status, err := w.Write([]byte(fmt.Sprintf("panic occurred: %s", err)))
 				if err != nil {
-					panic(fmt.Sprintf("%s: %v", err.Error(), status))
+					fmt.Printf(errFMT, err.Error(), status)
 				}
 			}
 		}()
@@ -46,7 +47,8 @@ func SaveMetric(w http.ResponseWriter, metric Metric, metricName string) {
 	w.WriteHeader(http.StatusOK)
 	status, err := w.Write([]byte(fmt.Sprintf("updated mapMetric: %v", MapMetric)))
 	if err != nil {
-		panic(fmt.Sprintf("%s: %v", err.Error(), status))
+		w.WriteHeader(http.StatusBadGateway)
+		fmt.Printf(errFMT, err.Error(), status)
 	}
 }
 
@@ -56,7 +58,8 @@ func Update(w http.ResponseWriter, request *http.Request) {
 	MetricValue := chi.URLParam(request, "MetricValue")
 	m, err := ValidateMetric(&w, MetricType, MetricValue)
 	if err != nil {
-		panic(err.Error())
+		fmt.Println(err.Error())
+		return
 	}
 	if m == nil {
 		return
