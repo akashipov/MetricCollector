@@ -30,6 +30,15 @@ func ServerRouter() chi.Router {
 func SaveMetric(w http.ResponseWriter, metric Metric, metricName string) {
 	val, ok := MapMetric.m[metricName]
 	if ok {
+		defer func() {
+			if err := recover(); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				status, err := w.Write([]byte(fmt.Sprintf("panic occurred: %s", err)))
+				if err != nil {
+					panic(fmt.Sprintf("%s: %v", err.Error(), status))
+				}
+			}
+		}()
 		val.Update(metric.GetValue())
 	} else {
 		MapMetric.m[metricName] = metric
