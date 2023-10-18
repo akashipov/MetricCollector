@@ -58,11 +58,11 @@ type MetricSender struct {
 
 func (r *MetricSender) PollInterval(isTestMode bool) {
 	memInfo := runtime.MemStats{}
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
 	countOfUpdate := 0
 	tickerPollInterval := time.NewTicker(time.Duration(*r.PollIntervalTime) * time.Second)
+	defer tickerPollInterval.Stop()
 	tickerReportInterval := time.NewTicker(time.Duration(*r.ReportIntervalTime) * time.Second)
+	defer tickerReportInterval.Stop()
 	for {
 		select {
 		case <-tickerPollInterval.C:
@@ -80,7 +80,7 @@ func (r *MetricSender) PollInterval(isTestMode bool) {
 	}
 }
 
-func (r *MetricSender) SendMetric(value interface{}, metricType string, metricName string) int {
+func (r *MetricSender) SendMetric(value interface{}, metricType string, metricName string) error {
 	url := fmt.Sprintf("%s/update/%s/%s/%v", r.URL, metricType, metricName, value)
 	fmt.Println("Sending post request with url: " + url)
 	resp, err := r.Client.R().ForceContentType("text/plain").SetBody("").Post(
@@ -88,13 +88,13 @@ func (r *MetricSender) SendMetric(value interface{}, metricType string, metricNa
 	)
 	if err != nil {
 		fmt.Printf("Request cannot be precossed, something is wrong: %s\n", err.Error())
-		return -2
+		return err
 	}
 	if resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusCreated {
 		fmt.Printf("Something wrong with resp - '%v', status code - %v\n", resp, resp.StatusCode())
-		return -1
+		return err
 	}
-	return 0
+	return nil
 }
 
 func (r *MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int) {
@@ -102,23 +102,23 @@ func (r *MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int) {
 	b, _ := json.Marshal(a)
 	var m map[string]interface{}
 	_ = json.Unmarshal(b, &m)
-	var code int
+	var err error
 	for _, v := range *r.ListMetrics {
-		code = r.SendMetric(
+		err = r.SendMetric(
 			m[v],
 			GAUGE,
 			v,
 		)
-		if code != 0 {
+		if err != nil {
 			return
 		}
 	}
-	code = r.SendMetric(countOfUpdate, COUNTER, "PollCount")
-	if code != 0 {
+	err = r.SendMetric(countOfUpdate, COUNTER, "PollCount")
+	if err != nil {
 		return
 	}
-	code = r.SendMetric(rand.Float64(), GAUGE, "RandomValue")
-	if code != 0 {
+	err = r.SendMetric(rand.Float64(), GAUGE, "RandomValue")
+	if err != nil {
 		return
 	}
 	fmt.Println("All metrics successfully sent")
