@@ -31,16 +31,11 @@ func SaveMetric(w http.ResponseWriter, metric Metric, metricName string) {
 	val, ok := MapMetric.m[metricName]
 	errFMT := "error - %s: status - %v\n"
 	if ok {
-		defer func() {
-			if err := recover(); err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				status, err := w.Write([]byte(fmt.Sprintf("panic occurred: %s", err)))
-				if err != nil {
-					fmt.Printf(errFMT, err.Error(), status)
-				}
-			}
-		}()
-		val.Update(metric.GetValue())
+		ok = val.Update(metric.GetValue())
+		if !ok {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Println("Bad type of metric value is passed for already existed")
+		}
 	} else {
 		MapMetric.m[metricName] = metric
 	}
