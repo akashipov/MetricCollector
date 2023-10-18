@@ -100,7 +100,7 @@ func (r *MetricSender) PollInterval(isTestMode bool) {
 	}
 }
 
-func (r *MetricSender) SendMetric(value interface{}, metricType string, metricName string) {
+func (r *MetricSender) SendMetric(value interface{}, metricType string, metricName string) int {
 	url := fmt.Sprintf("%s/update/%s/%s/%v", r.URL, metricType, metricName, value)
 	fmt.Println("Sending post request with url: " + url)
 	resp, err := r.Client.R().ForceContentType("text/plain").SetBody("").Post(
@@ -108,11 +108,13 @@ func (r *MetricSender) SendMetric(value interface{}, metricType string, metricNa
 	)
 	if err != nil {
 		fmt.Printf("Request cannot be precossed, something is wrong: %s\n", err.Error())
+		return -2
 	}
-	status := resp.StatusCode()
-	if status != http.StatusOK && status != http.StatusCreated {
-		fmt.Printf("Something wrong with '%v': status code is %v\n", resp, resp.StatusCode())
+	if resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusCreated {
+		fmt.Printf("Something wrong with resp - '%v', status code - %v\n", resp, resp.StatusCode())
+		return -1
 	}
+	return 0
 }
 
 func (r *MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int) {
@@ -120,14 +122,24 @@ func (r *MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int) {
 	b, _ := json.Marshal(a)
 	var m map[string]interface{}
 	_ = json.Unmarshal(b, &m)
+	var code int
 	for _, v := range *r.ListMetrics {
-		r.SendMetric(
+		code = r.SendMetric(
 			m[v],
 			GAUGE,
 			v,
 		)
+		if code != 0 {
+			return
+		}
 	}
-	r.SendMetric(countOfUpdate, COUNTER, "PollCount")
-	r.SendMetric(rand.Float64(), GAUGE, "RandomValue")
+	code = r.SendMetric(countOfUpdate, COUNTER, "PollCount")
+	if code != 0 {
+		return
+	}
+	code = r.SendMetric(rand.Float64(), GAUGE, "RandomValue")
+	if code != 0 {
+		return
+	}
 	fmt.Println("All metrics successfully sent")
 }
