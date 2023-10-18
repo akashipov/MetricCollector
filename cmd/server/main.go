@@ -13,7 +13,7 @@ import (
 
 func main() {
 
-	srv := http.Server{Handler: server.ServerRouter()}
+	srv := &http.Server{Handler: server.ServerRouter()}
 
 	done := make(chan bool, 1)
 
@@ -42,7 +42,7 @@ func main() {
 	fmt.Println("exiting")
 }
 
-func run(srv http.Server) {
+func run(srv *http.Server) {
 	server.ParseArgsServer()
 	srv.Addr = *server.HPServer
 	fmt.Printf("Server is running on %s...\n", *server.HPServer)

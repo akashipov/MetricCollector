@@ -56,46 +56,26 @@ type MetricSender struct {
 	PollIntervalTime   *int
 }
 
-func (r *MetricSender) PollIntervalCatch(
-	donePollInterval chan bool,
-) {
-	time.Sleep(time.Duration(*r.PollIntervalTime) * time.Second)
-	donePollInterval <- true
-}
-
-func (r *MetricSender) ReportIntervalCatch(
-	doneReportInterval chan bool,
-) {
-	time.Sleep(time.Duration(*r.ReportIntervalTime) * time.Second)
-	doneReportInterval <- true
-}
-
 func (r *MetricSender) PollInterval(isTestMode bool) {
 	memInfo := runtime.MemStats{}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
-	donePollInterval := make(chan bool)
-	doneReportInterval := make(chan bool)
 	countOfUpdate := 0
-	go r.PollIntervalCatch(donePollInterval)
-	go r.ReportIntervalCatch(doneReportInterval)
+	tickerPollInterval := time.NewTicker(time.Duration(*r.PollIntervalTime) * time.Second)
+	tickerReportInterval := time.NewTicker(time.Duration(*r.ReportIntervalTime) * time.Second)
 	for {
 		select {
-		case <-donePollInterval:
+		case <-tickerPollInterval.C:
 			runtime.ReadMemStats(&memInfo)
 			countOfUpdate += 1
-			go r.PollIntervalCatch(donePollInterval)
 			fmt.Println("Done PollInterval!")
-		case <-doneReportInterval:
+		case <-tickerReportInterval.C:
 			r.ReportInterval(&memInfo, countOfUpdate)
 			countOfUpdate = 0
-			go r.ReportIntervalCatch(doneReportInterval)
 			fmt.Println("Done ReportInterval!")
 			if isTestMode {
 				return
 			}
-		case t := <-ticker.C:
-			fmt.Println("Current time: ", t)
 		}
 	}
 }
