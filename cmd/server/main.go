@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/akashipov/MetricCollector/internal/server"
+	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"os"
@@ -12,8 +13,15 @@ import (
 )
 
 func main() {
-
-	srv := &http.Server{Handler: server.ServerRouter()}
+	var sugar zap.SugaredLogger
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		// вызываем панику, если ошибка
+		panic(err)
+	}
+	defer logger.Sync()
+	sugar = *logger.Sugar()
+	srv := &http.Server{Handler: server.ServerRouter(&sugar)}
 
 	done := make(chan bool, 1)
 

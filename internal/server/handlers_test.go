@@ -5,6 +5,7 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -142,7 +143,14 @@ func TestUpdate(t *testing.T) {
 		URL         string
 		contentType string
 	}
-	server := httptest.NewServer(ServerRouter())
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		// вызываем панику, если ошибка
+		panic(err)
+	}
+	defer logger.Sync()
+	s := *logger.Sugar()
+	server := httptest.NewServer(ServerRouter(&s))
 	defer server.Close()
 	tests := []struct {
 		name           string
@@ -233,7 +241,14 @@ func TestGetMetric(t *testing.T) {
 		URL         string
 		contentType string
 	}
-	server := httptest.NewServer(ServerRouter())
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		// вызываем панику, если ошибка
+		panic(err)
+	}
+	defer logger.Sync()
+	s := *logger.Sugar()
+	server := httptest.NewServer(ServerRouter(&s))
 	a := int64(10)
 	MapMetric.m = make(map[string]Metric)
 	MapMetric.m["A"] = NewCounter(a)

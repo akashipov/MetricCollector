@@ -2,26 +2,28 @@ package server
 
 import (
 	"fmt"
+	"github.com/akashipov/MetricCollector/internal/server/logger"
 	"github.com/go-chi/chi"
+	"go.uber.org/zap"
 	"net/http"
 	"reflect"
 	"sort"
 	"strings"
 )
 
-func ServerRouter() chi.Router {
+func ServerRouter(s *zap.SugaredLogger) chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", MainPage)
 	r.Route(
 		"/update/{MetricType}/{MetricName}/{MetricValue}",
 		func(r chi.Router) {
-			r.Post("/", Update)
+			r.Post("/", logger.WithLogging(http.HandlerFunc(Update), s))
 		},
 	)
 	r.Route(
 		"/value/{MetricType}/{MetricName}",
 		func(r chi.Router) {
-			r.Get("/", GetMetric)
+			r.Get("/", logger.WithLogging(http.HandlerFunc(GetMetric), s))
 		},
 	)
 	return r
