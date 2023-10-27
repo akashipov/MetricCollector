@@ -1,9 +1,13 @@
 package server
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/akashipov/MetricCollector/internal/general"
+)
 
 type MemStorage struct {
-	m map[string]Metric
+	m map[string]general.Metric
 }
 
 func (r *MemStorage) String() string {
@@ -14,9 +18,9 @@ func (r *MemStorage) String() string {
 	return s
 }
 
-func NewStorage(vMap map[string]Metric) *MemStorage {
+func NewStorage(vMap map[string]general.Metric) *MemStorage {
 	if vMap == nil {
-		return &MemStorage{map[string]Metric{}}
+		return &MemStorage{map[string]general.Metric{}}
 	}
 	return &MemStorage{vMap}
 }

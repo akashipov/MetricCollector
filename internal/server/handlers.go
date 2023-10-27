@@ -1,52 +1,50 @@
 package server
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/akashipov/MetricCollector/internal/server/logger"
-	"github.com/go-chi/chi"
-	"go.uber.org/zap"
 	"net/http"
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/akashipov/MetricCollector/internal/agent"
+	"github.com/akashipov/MetricCollector/internal/general"
+	"github.com/akashipov/MetricCollector/internal/server/logger"
+	"github.com/go-chi/chi"
+	"go.uber.org/zap"
 )
 
 func ServerRouter(s *zap.SugaredLogger) chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", MainPage)
 	r.Route(
-		"/update/{MetricType}/{MetricName}/{MetricValue}",
+		"/update",
 		func(r chi.Router) {
-			r.Post("/", logger.WithLogging(http.HandlerFunc(Update), s))
+			r.Route(
+				"/{MetricType}/{MetricName}/{MetricValue}",
+				func(r chi.Router) {
+					r.Post("/", logger.WithLogging(http.HandlerFunc(Update), s))
+				},
+			)
+			r.Post("/", logger.WithLogging(http.HandlerFunc(UpdateShortForm), s))
 		},
 	)
 	r.Route(
-		"/value/{MetricType}/{MetricName}",
+		"/value",
 		func(r chi.Router) {
-			r.Get("/", logger.WithLogging(http.HandlerFunc(GetMetric), s))
+			r.Route(
+				"/{MetricType}/{MetricName}",
+				func(r chi.Router) {
+					r.Get("/", logger.WithLogging(http.HandlerFunc(GetMetric), s))
+				},
+			)
+			r.Post("/", logger.WithLogging(http.HandlerFunc(GetMetricShortForm), s))
 		},
 	)
 	return r
-}
-
-func SaveMetric(w http.ResponseWriter, metric Metric, metricName string) {
-	val, ok := MapMetric.m[metricName]
-	errFMT := "error - %s: status - %v\n"
-	if ok {
-		ok = val.Update(metric.GetValue())
-		if !ok {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Println("Bad type of metric value is passed for already existed")
-		}
-	} else {
-		MapMetric.m[metricName] = metric
-	}
-	w.WriteHeader(http.StatusOK)
-	status, err := w.Write([]byte(fmt.Sprintf("updated mapMetric: %v", MapMetric)))
-	if err != nil {
-		w.WriteHeader(http.StatusBadGateway)
-		fmt.Printf(errFMT, err.Error(), status)
-	}
 }
 
 func Update(w http.ResponseWriter, request *http.Request) {
@@ -64,6 +62,89 @@ func Update(w http.ResponseWriter, request *http.Request) {
 	SaveMetric(w, m, MetricName)
 }
 
+func SaveMetric(w http.ResponseWriter, metric general.Metric, metricName string) error {
+	val, ok := MapMetric.m[metricName]
+	if ok {
+		ok = val.Update(metric.GetValue())
+		if !ok {
+			w.WriteHeader(http.StatusBadRequest)
+			return errors.New("bad type of metric value is passed for already existed")
+		}
+	} else {
+		MapMetric.m[metricName] = metric
+	}
+	w.WriteHeader(http.StatusOK)
+	return nil
+}
+
+func UpdateShortForm(w http.ResponseWriter, request *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var buf bytes.Buffer
+	var metric general.Metrics
+	_, err := buf.ReadFrom(request.Body)
+	defer request.Body.Close()
+	if err != nil {
+		fmt.Println(err.Error())
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	err = json.Unmarshal(buf.Bytes(), &metric)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	MetricType := metric.MType
+	MetricName := metric.ID
+	var MetricValue interface{}
+	switch metric.MType {
+	case agent.GAUGE:
+		MetricValue = *metric.Value
+	case agent.COUNTER:
+		MetricValue = *metric.Delta
+	default:
+		print(errors.New("wrong type of metric type"))
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(fmt.Sprintf("Wrong type of metric: '%s'", MetricType)))
+		return
+	}
+	m, err := ValidateMetric(&w, MetricType, MetricValue)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	if m == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	err = SaveMetric(w, m, MetricName)
+	switch MetricType {
+	case agent.COUNTER:
+		v, ok := MapMetric.m[MetricName].GetValue().(int64)
+		if ok {
+			metric.Delta = &v
+		}
+	case agent.GAUGE:
+		v, ok := MapMetric.m[MetricName].GetValue().(float64)
+		if ok {
+			metric.Value = &v
+		}
+	}
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		fmt.Printf("error - %s", err.Error())
+	}
+	w.WriteHeader(http.StatusOK)
+	b, err := json.Marshal(metric)
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		fmt.Println(err.Error())
+		return
+	}
+	w.Write(b)
+}
+
 func MainPage(w http.ResponseWriter, request *http.Request) {
 	ul := "<ul>"
 	var keys []string
@@ -78,6 +159,63 @@ func MainPage(w http.ResponseWriter, request *http.Request) {
 	html := fmt.Sprintf("<html>%s</html>", ul)
 	w.WriteHeader(http.StatusOK)
 	status, err := w.Write([]byte(html))
+	if err != nil {
+		fmt.Printf("%v: %v", status, err.Error())
+	}
+}
+
+func GetMetricShortForm(w http.ResponseWriter, request *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var buf bytes.Buffer
+	var metric general.Metrics
+	_, err := buf.ReadFrom(request.Body)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	json.Unmarshal(buf.Bytes(), &metric)
+	MetricName := metric.ID
+	MetricType := metric.MType
+	var answer []byte
+	if MetricValue, ok := MapMetric.m[MetricName]; ok {
+		typeMetricValue := strings.ToLower(reflect.TypeOf(MetricValue).Elem().Name())
+		if typeMetricValue == MetricType {
+			w.WriteHeader(http.StatusOK)
+			switch MetricType {
+			case agent.COUNTER:
+				v, ok := MetricValue.GetValue().(int64)
+				if ok {
+					metric.Delta = &v
+					answer, err = json.Marshal(metric)
+					if err != nil {
+						answer = []byte(err.Error())
+					}
+				} else {
+					answer = []byte("Something wrong with type of metric")
+				}
+			case agent.GAUGE:
+				v, ok := MetricValue.GetValue().(float64)
+				if ok {
+					metric.Value = &v
+					answer, err = json.Marshal(metric)
+					if err != nil {
+						answer = []byte(err.Error())
+					}
+				} else {
+					answer = []byte("Something wrong with type of metric")
+				}
+			default:
+				answer = []byte("Wrong type of metric")
+			}
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+			answer = []byte(fmt.Sprintf("It has other metric type: '%s'", typeMetricValue))
+		}
+	} else {
+		w.WriteHeader(http.StatusNotFound)
+		answer = []byte(fmt.Sprintf("There is no metric like this: '%v'", MetricName))
+	}
+	status, err := w.Write(answer)
 	if err != nil {
 		fmt.Printf("%v: %v", status, err.Error())
 	}

@@ -3,11 +3,12 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/go-resty/resty/v2"
 	"math/rand"
 	"net/http"
 	"runtime"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 )
 
 var ListMetrics = []string{
@@ -81,9 +82,20 @@ func (r *MetricSender) PollInterval(isTestMode bool) {
 }
 
 func (r *MetricSender) SendMetric(value interface{}, metricType string, metricName string) error {
-	url := fmt.Sprintf("%s/update/%s/%s/%v", r.URL, metricType, metricName, value)
+	url := fmt.Sprintf("%s/update/", r.URL)
 	fmt.Println("Sending post request with url: " + url)
-	resp, err := r.Client.R().ForceContentType("text/plain").SetBody("").Post(
+	var s string
+	switch metricType {
+	case COUNTER:
+		s = fmt.Sprintf("{\"id\":\"%s\",\"type\":\"%s\",\"delta\":%d}", metricName, metricType, value)
+	case GAUGE:
+		s = fmt.Sprintf("{\"id\":\"%s\",\"type\":\"%s\",\"value\":%f}", metricName, metricType, value)
+	default:
+		fmt.Printf("Wrong type of metric: %v\n", metricType)
+		return nil
+	}
+	req := r.Client.R().SetBody(s).SetHeader("Content-Type", "application/json")
+	resp, err := req.Post(
 		url,
 	)
 	if err != nil {
@@ -94,6 +106,7 @@ func (r *MetricSender) SendMetric(value interface{}, metricType string, metricNa
 		fmt.Printf("Something wrong with resp - '%v', status code - %v\n", resp, resp.StatusCode())
 		return err
 	}
+	fmt.Printf("Success: %v\n", resp.StatusCode())
 	return nil
 }
 

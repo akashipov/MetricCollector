@@ -2,16 +2,18 @@ package server
 
 import (
 	"testing"
+
+	"github.com/akashipov/MetricCollector/internal/general"
 )
 
 func TestMemStorage_String(t *testing.T) {
 	type fields struct {
-		m map[string]Metric
+		m map[string]general.Metric
 	}
 	var m int64 = 1
-	var a Metric = NewCounter(m)
+	var a general.Metric = general.NewCounter(m)
 	m = 2
-	var b Metric = NewCounter(m)
+	var b general.Metric = general.NewCounter(m)
 	tests := []struct {
 		name   string
 		fields fields
@@ -20,14 +22,14 @@ func TestMemStorage_String(t *testing.T) {
 		{
 			name: "one",
 			fields: fields{
-				m: map[string]Metric{"a": a},
+				m: map[string]general.Metric{"a": a},
 			},
 			want: []string{"key: a -> value: 1\n"},
 		},
 		{
 			name: "several",
 			fields: fields{
-				m: map[string]Metric{
+				m: map[string]general.Metric{
 					"a": a,
 					"b": b,
 				},

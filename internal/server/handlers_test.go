@@ -2,14 +2,16 @@ package server
 
 import (
 	"fmt"
-	"github.com/go-resty/resty/v2"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+
+	"github.com/akashipov/MetricCollector/internal/general"
+	"github.com/go-resty/resty/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 var StatusOK string = fmt.Sprintf("%v", http.StatusOK)
@@ -22,9 +24,7 @@ func (r *CustomResponseWriter) Write(bytes []byte) (int, error) {
 	if r.header == nil {
 		r.header = make(map[string][]string)
 	}
-	record := string(bytes)
-	r.header["Record"] = []string{record}
-	return len(record), nil
+	return 6, nil
 }
 
 func (r *CustomResponseWriter) WriteHeader(statusCode int) {
@@ -42,13 +42,13 @@ func (r *CustomResponseWriter) Header() http.Header {
 func TestSaveMetric(t *testing.T) {
 	type args struct {
 		w          http.ResponseWriter
-		metric     Metric
+		metric     general.Metric
 		metricName string
 	}
-	var commonMetric1 Metric = NewCounter(int64(10))
-	var commonMetric2 Metric = NewCounter(int64(7))
-	var commonMetric3 Metric = NewCounter(int64(26))
-	var commonMetric4 Metric = NewGauge(float64(13))
+	var commonMetric1 general.Metric = general.NewCounter(int64(10))
+	var commonMetric2 general.Metric = general.NewCounter(int64(7))
+	var commonMetric3 general.Metric = general.NewCounter(int64(26))
+	var commonMetric4 general.Metric = general.NewGauge(float64(13))
 	var customWriter http.ResponseWriter = &CustomResponseWriter{}
 	tests := []struct {
 		name            string
@@ -56,8 +56,7 @@ func TestSaveMetric(t *testing.T) {
 		triggerCount    int
 		BaseDirEnvValue string
 		wantStatusCode  []string
-		wantAnswer      string
-		wantMap         map[string]Metric
+		wantMap         map[string]general.Metric
 	}{
 		{
 			name: "common1",
@@ -69,8 +68,7 @@ func TestSaveMetric(t *testing.T) {
 			triggerCount:    1,
 			BaseDirEnvValue: t.TempDir(),
 			wantStatusCode:  []string{StatusOK},
-			wantAnswer:      "updated mapMetric",
-			wantMap:         map[string]Metric{"Blabla1": commonMetric1},
+			wantMap:         map[string]general.Metric{"Blabla1": commonMetric1},
 		},
 		{
 			name: "common2",
@@ -82,21 +80,19 @@ func TestSaveMetric(t *testing.T) {
 			triggerCount:    1,
 			BaseDirEnvValue: filepath.Join(t.TempDir(), "test_folder"),
 			wantStatusCode:  []string{StatusOK},
-			wantAnswer:      "updated mapMetric",
-			wantMap:         map[string]Metric{"Blabla2": commonMetric2},
+			wantMap:         map[string]general.Metric{"Blabla2": commonMetric2},
 		},
 		{
 			name: "common_counter_repeated",
 			args: args{
 				customWriter,
-				NewCounter(int64(13)),
+				general.NewCounter(int64(13)),
 				"Blabla3",
 			},
 			triggerCount:    2,
 			BaseDirEnvValue: t.TempDir(),
 			wantStatusCode:  []string{StatusOK},
-			wantAnswer:      "updated mapMetric",
-			wantMap:         map[string]Metric{"Blabla3": commonMetric3},
+			wantMap:         map[string]general.Metric{"Blabla3": commonMetric3},
 		},
 		{
 			name: "common_gauge_repeated",
@@ -108,8 +104,7 @@ func TestSaveMetric(t *testing.T) {
 			triggerCount:    2,
 			BaseDirEnvValue: t.TempDir(),
 			wantStatusCode:  []string{StatusOK},
-			wantAnswer:      "updated mapMetric",
-			wantMap:         map[string]Metric{"Blabla4": commonMetric4},
+			wantMap:         map[string]general.Metric{"Blabla4": commonMetric4},
 		},
 	}
 
@@ -120,19 +115,14 @@ func TestSaveMetric(t *testing.T) {
 				SaveMetric(tt.args.w, tt.args.metric, tt.args.metricName)
 			}
 			header := customWriter.Header()
-			assert.EqualValues(t, header["Status-Code"], tt.wantStatusCode)
-			assert.Contains(
-				t,
-				header["Record"][0],
-				tt.wantAnswer,
-			)
+			assert.EqualValues(t, tt.wantStatusCode, header["Status-Code"])
 			assert.Equal(t, len(MapMetric.m), len(tt.wantMap))
 			for k, v := range tt.wantMap {
 				actualValue, ok := MapMetric.m[k]
 				require.True(t, ok)
 				assert.Equal(t, v.GetValue(), actualValue.GetValue())
 			}
-			MapMetric.m = make(map[string]Metric)
+			MapMetric.m = make(map[string]general.Metric)
 		})
 	}
 }
@@ -145,7 +135,6 @@ func TestUpdate(t *testing.T) {
 	}
 	logger, err := zap.NewDevelopment()
 	if err != nil {
-		// вызываем панику, если ошибка
 		panic(err)
 	}
 	defer logger.Sync()
@@ -166,7 +155,7 @@ func TestUpdate(t *testing.T) {
 				contentType: "text/plain",
 			},
 			wantStatusCode: http.StatusOK,
-			wantAnswer:     "updated mapMetric",
+			wantAnswer:     "",
 		},
 		{
 			name: "common_bad_metric_type",
@@ -231,6 +220,239 @@ func TestUpdate(t *testing.T) {
 				resp.String(),
 				tt.wantAnswer,
 			)
+			MapMetric.m = make(map[string]general.Metric)
+		})
+	}
+}
+
+func TestUpdateShortForm(t *testing.T) {
+	type args struct {
+		Method      string
+		URL         string
+		contentType string
+		Body        string
+	}
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
+	defer logger.Sync()
+	s := *logger.Sugar()
+	server := httptest.NewServer(ServerRouter(&s))
+	defer server.Close()
+	tests := []struct {
+		name           string
+		args           args
+		wantStatusCode int
+		wantAnswer     string
+	}{
+		{
+			name: "common_ok",
+			args: args{
+				Method:      http.MethodPost,
+				URL:         server.URL + "/update",
+				contentType: "application/json",
+				Body:        "{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}",
+			},
+			wantStatusCode: http.StatusOK,
+			wantAnswer:     "{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}",
+		},
+		{
+			name: "common_bad_metric_type",
+			args: args{
+				Method:      http.MethodPost,
+				URL:         server.URL + "/update",
+				contentType: "application/json",
+				Body:        "{\"id\":\"A\",\"type\":\"counter1\",\"delta\":10}",
+			},
+			wantStatusCode: http.StatusNotFound,
+			wantAnswer:     "Wrong type of metric: 'counter1'",
+		},
+		{
+			name: "common_inconvertible_type",
+			args: args{
+				Method:      http.MethodPost,
+				URL:         server.URL + "/update",
+				contentType: "application/json",
+				Body:        "{\"id\":\"A\",\"type\":\"counter\",\"delta\":\"none\"}",
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantAnswer:     "field Metrics.delta of type int64",
+		},
+		{
+			name: "common_not_found",
+			args: args{
+				Method:      http.MethodPost,
+				URL:         server.URL + "/update",
+				contentType: "application/json",
+				Body:        "{\"id\":\"A\",\"delta\":10}",
+			},
+			wantStatusCode: http.StatusNotFound,
+			wantAnswer:     "",
+		},
+		{
+			name: "common_not_allowed_method",
+			args: args{
+				Method:      http.MethodGet,
+				URL:         server.URL + "/update",
+				contentType: "application/json",
+				Body:        "{\"id\":\"A\",\"type\":\"counter\",\"delta\":\"10\"}",
+			},
+			wantStatusCode: http.StatusMethodNotAllowed,
+			wantAnswer:     "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := resty.New()
+			r := c.R().ForceContentType(tt.args.contentType).SetBody(tt.args.Body)
+			var resp *resty.Response
+			var err error
+			switch tt.args.Method {
+			case http.MethodPost:
+				resp, err = r.Post(tt.args.URL)
+			case http.MethodGet:
+				resp, err = r.Get(tt.args.URL)
+			}
+
+			if err != nil {
+				panic(err)
+			}
+			assert.EqualValues(t, tt.wantStatusCode, resp.StatusCode())
+			assert.Contains(
+				t,
+				resp.String(),
+				tt.wantAnswer,
+			)
+			MapMetric.m = make(map[string]general.Metric)
+		})
+	}
+}
+
+func TestGetMetricShortForm(t *testing.T) {
+	type args struct {
+		Method      string
+		URL         string
+		contentType string
+		Body        string
+	}
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
+	defer logger.Sync()
+	s := *logger.Sugar()
+	server := httptest.NewServer(ServerRouter(&s))
+	a := int64(10)
+	MapMetric.m = make(map[string]general.Metric)
+	MapMetric.m["A"] = general.NewCounter(a)
+	b := float64(17)
+	MapMetric.m["B"] = general.NewGauge(b)
+	defer server.Close()
+	tests := []struct {
+		name           string
+		args           args
+		wantStatusCode int
+		wantAnswer     string
+	}{
+		{
+			name: "common_counter_ok",
+			args: args{
+				Method:      http.MethodPost,
+				URL:         server.URL + "/value",
+				contentType: "application/json",
+				Body:        "{\"type\":\"counter\",\"id\":\"A\"}",
+			},
+			wantStatusCode: http.StatusOK,
+			wantAnswer:     "{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}",
+		},
+		{
+			name: "common_gauge_ok",
+			args: args{
+				Method:      http.MethodPost,
+				URL:         server.URL + "/value",
+				contentType: "application/json",
+				Body:        "{\"type\":\"gauge\",\"id\":\"B\"}",
+			},
+			wantStatusCode: http.StatusOK,
+			wantAnswer:     "{\"id\":\"B\",\"type\":\"gauge\",\"value\":17}",
+		},
+		{
+			name: "common_gauge_wrong_type",
+			args: args{
+				Method:      http.MethodPost,
+				URL:         server.URL + "/value",
+				contentType: "application/json",
+				Body:        "{\"id\":\"C\",\"type\":\"counter\"}",
+			},
+			wantStatusCode: http.StatusNotFound,
+			wantAnswer:     "There is no metric like this: 'C'",
+		},
+		{
+			name: "common_gauge_wrong_type",
+			args: args{
+				Method:      http.MethodPost,
+				URL:         server.URL + "/value",
+				contentType: "application/json",
+				Body:        "{\"type\":\"counter\",\"id\":\"B\"}",
+			},
+			wantStatusCode: http.StatusNotFound,
+			wantAnswer:     "It has other metric type: 'gauge'",
+		},
+		{
+			name: "common_gauge_base_dir",
+			args: args{
+				Method:      http.MethodGet,
+				URL:         server.URL,
+				contentType: "application/json",
+			},
+			wantStatusCode: http.StatusOK,
+			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17</li></ul></html>",
+		},
+		{
+			name: "common_not_allowed_get_base",
+			args: args{
+				Method:      http.MethodGet,
+				URL:         server.URL + "/value",
+				contentType: "application/json",
+			},
+			wantStatusCode: http.StatusMethodNotAllowed,
+			wantAnswer:     "",
+		},
+		{
+			name: "common_not_allowed_get_base",
+			args: args{
+				Method:      http.MethodGet,
+				URL:         server.URL + "/value",
+				contentType: "application/json",
+				Body:        "{\"type\":\"gauge\",\"id\":\"B\"}",
+			},
+			wantStatusCode: http.StatusMethodNotAllowed,
+			wantAnswer:     "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := resty.New()
+			r := c.R().ForceContentType(tt.args.contentType).SetBody(tt.args.Body)
+			var resp *resty.Response
+			var err error
+			switch tt.args.Method {
+			case http.MethodPost:
+				resp, err = r.Post(tt.args.URL)
+			case http.MethodGet:
+				resp, err = r.Get(tt.args.URL)
+			}
+
+			if err != nil {
+				panic(err)
+			}
+			assert.EqualValues(t, tt.wantStatusCode, resp.StatusCode())
+			assert.Contains(
+				t,
+				resp.String(),
+				tt.wantAnswer,
+			)
 		})
 	}
 }
@@ -250,10 +472,10 @@ func TestGetMetric(t *testing.T) {
 	s := *logger.Sugar()
 	server := httptest.NewServer(ServerRouter(&s))
 	a := int64(10)
-	MapMetric.m = make(map[string]Metric)
-	MapMetric.m["A"] = NewCounter(a)
+	MapMetric.m = make(map[string]general.Metric)
+	MapMetric.m["A"] = general.NewCounter(a)
 	b := float64(17)
-	MapMetric.m["B"] = NewGauge(b)
+	MapMetric.m["B"] = general.NewGauge(b)
 	defer server.Close()
 	tests := []struct {
 		name           string
