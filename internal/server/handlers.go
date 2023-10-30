@@ -19,7 +19,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func ServerRouter(s *zap.SugaredLogger) chi.Router {
+func ServerRouter(s *zap.SugaredLogger) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", MainPage)
 	r.Route(
@@ -46,7 +46,7 @@ func ServerRouter(s *zap.SugaredLogger) chi.Router {
 			r.Post("/", logger.WithLogging(http.HandlerFunc(GetMetricShortForm), s))
 		},
 	)
-	return r
+	return GzipHandle(r)
 }
 
 func Update(w http.ResponseWriter, request *http.Request) {
@@ -155,6 +155,7 @@ func UpdateShortForm(w http.ResponseWriter, request *http.Request) {
 }
 
 func MainPage(w http.ResponseWriter, request *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
 	ul := "<ul>"
 	var keys []string
 	for k := range MapMetric.m {
@@ -179,11 +180,13 @@ func GzipHandle(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if !strings.Contains(r.Header.Get("Content-Type"), "application/json") &&
-			!strings.Contains(r.Header.Get("Content-Type"), "text/html") {
-			next.ServeHTTP(w, r)
-			return
-		}
+		// contentType := w.Header().Get("Content-Type")
+		// fmt.Printf("Content-Type of response: '%s'\n", contentType)
+		// if !strings.Contains(contentType, "application/json") &&
+		// 	!strings.Contains(contentType, "text/html") {
+		// 	next.ServeHTTP(w, r)
+		// 	return
+		// }
 
 		gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
 		if err != nil {

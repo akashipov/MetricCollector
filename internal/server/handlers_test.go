@@ -505,9 +505,10 @@ func TestGetMetricShortForm(t *testing.T) {
 
 func TestGetMetric(t *testing.T) {
 	type args struct {
-		Method      string
-		URL         string
-		contentType string
+		Method         string
+		URL            string
+		contentType    string
+		acceptEncoding bool
 	}
 	logger, err := zap.NewDevelopment()
 	if err != nil {
@@ -580,6 +581,17 @@ func TestGetMetric(t *testing.T) {
 			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17</li></ul></html>",
 		},
 		{
+			name: "common_gauge_base_dir_encoding",
+			args: args{
+				Method:         http.MethodGet,
+				URL:            server.URL,
+				contentType:    "text/html",
+				acceptEncoding: true,
+			},
+			wantStatusCode: http.StatusOK,
+			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17</li></ul></html>",
+		},
+		{
 			name: "common_not_allowed_post_base",
 			args: args{
 				Method:      http.MethodPost,
@@ -603,7 +615,10 @@ func TestGetMetric(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := resty.New()
-			r := c.R().ForceContentType(tt.args.contentType)
+			r := c.R().SetHeader("Content-Type", tt.args.contentType)
+			if tt.args.acceptEncoding {
+				r.SetHeader("Accept-Encoding", "gzip")
+			}
 			var resp *resty.Response
 			var err error
 			switch tt.args.Method {
@@ -615,6 +630,9 @@ func TestGetMetric(t *testing.T) {
 
 			if err != nil {
 				panic(err)
+			}
+			if tt.args.acceptEncoding {
+				assert.Equal(t, resp.Header().Get("Content-Encoding"), "")
 			}
 			assert.EqualValues(t, tt.wantStatusCode, resp.StatusCode())
 			assert.Contains(
