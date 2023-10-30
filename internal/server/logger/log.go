@@ -1,9 +1,10 @@
 package logger
 
 import (
-	"go.uber.org/zap"
 	"net/http"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type (
@@ -40,7 +41,7 @@ func WithLogging(h http.Handler, s *zap.SugaredLogger) func(w http.ResponseWrite
 			size:   0,
 		}
 		lw := loggingResponseWriter{
-			ResponseWriter: w, // встраиваем оригинальный http.ResponseWriter
+			ResponseWriter: w,
 			responseData:   responseData,
 		}
 		h.ServeHTTP(&lw, r)
@@ -56,6 +57,5 @@ func WithLogging(h http.Handler, s *zap.SugaredLogger) func(w http.ResponseWrite
 		)
 
 	}
-	// возвращаем функционально расширенный хендлер
 	return logFn
 }

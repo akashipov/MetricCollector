@@ -1,6 +1,8 @@
 package server
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -225,12 +227,25 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
+func Encode(data []byte) []byte {
+	var b bytes.Buffer
+	gz := gzip.NewWriter(&b)
+	if _, err := gz.Write(data); err != nil {
+		fmt.Println(err.Error())
+	}
+	if err := gz.Close(); err != nil {
+		fmt.Println(err.Error())
+	}
+	return b.Bytes()
+}
+
 func TestUpdateShortForm(t *testing.T) {
 	type args struct {
-		Method      string
-		URL         string
-		contentType string
-		Body        string
+		Method          string
+		URL             string
+		contentType     string
+		contentEncoding bool
+		Body            []byte
 	}
 	logger, err := zap.NewDevelopment()
 	if err != nil {
@@ -252,7 +267,19 @@ func TestUpdateShortForm(t *testing.T) {
 				Method:      http.MethodPost,
 				URL:         server.URL + "/update",
 				contentType: "application/json",
-				Body:        "{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}",
+				Body:        []byte("{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}"),
+			},
+			wantStatusCode: http.StatusOK,
+			wantAnswer:     "{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}",
+		},
+		{
+			name: "common_ok_encoding",
+			args: args{
+				Method:          http.MethodPost,
+				URL:             server.URL + "/update",
+				contentType:     "application/json",
+				contentEncoding: true,
+				Body:            Encode([]byte("{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}")),
 			},
 			wantStatusCode: http.StatusOK,
 			wantAnswer:     "{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}",
@@ -263,7 +290,7 @@ func TestUpdateShortForm(t *testing.T) {
 				Method:      http.MethodPost,
 				URL:         server.URL + "/update",
 				contentType: "application/json",
-				Body:        "{\"id\":\"A\",\"type\":\"counter1\",\"delta\":10}",
+				Body:        []byte("{\"id\":\"A\",\"type\":\"counter1\",\"delta\":10}"),
 			},
 			wantStatusCode: http.StatusNotFound,
 			wantAnswer:     "Wrong type of metric: 'counter1'",
@@ -274,7 +301,7 @@ func TestUpdateShortForm(t *testing.T) {
 				Method:      http.MethodPost,
 				URL:         server.URL + "/update",
 				contentType: "application/json",
-				Body:        "{\"id\":\"A\",\"type\":\"counter\",\"delta\":\"none\"}",
+				Body:        []byte("{\"id\":\"A\",\"type\":\"counter\",\"delta\":\"none\"}"),
 			},
 			wantStatusCode: http.StatusBadRequest,
 			wantAnswer:     "field Metrics.delta of type int64",
@@ -285,7 +312,7 @@ func TestUpdateShortForm(t *testing.T) {
 				Method:      http.MethodPost,
 				URL:         server.URL + "/update",
 				contentType: "application/json",
-				Body:        "{\"id\":\"A\",\"delta\":10}",
+				Body:        []byte("{\"id\":\"A\",\"delta\":10}"),
 			},
 			wantStatusCode: http.StatusNotFound,
 			wantAnswer:     "",
@@ -296,7 +323,7 @@ func TestUpdateShortForm(t *testing.T) {
 				Method:      http.MethodGet,
 				URL:         server.URL + "/update",
 				contentType: "application/json",
-				Body:        "{\"id\":\"A\",\"type\":\"counter\",\"delta\":\"10\"}",
+				Body:        []byte("{\"id\":\"A\",\"type\":\"counter\",\"delta\":\"10\"}"),
 			},
 			wantStatusCode: http.StatusMethodNotAllowed,
 			wantAnswer:     "",
@@ -306,6 +333,9 @@ func TestUpdateShortForm(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := resty.New()
 			r := c.R().ForceContentType(tt.args.contentType).SetBody(tt.args.Body)
+			if tt.args.contentEncoding {
+				r.SetHeader("Content-Encoding", "gzip")
+			}
 			var resp *resty.Response
 			var err error
 			switch tt.args.Method {
@@ -331,10 +361,11 @@ func TestUpdateShortForm(t *testing.T) {
 
 func TestGetMetricShortForm(t *testing.T) {
 	type args struct {
-		Method      string
-		URL         string
-		contentType string
-		Body        string
+		Method          string
+		URL             string
+		contentType     string
+		contentEncoding bool
+		Body            []byte
 	}
 	logger, err := zap.NewDevelopment()
 	if err != nil {
@@ -361,7 +392,19 @@ func TestGetMetricShortForm(t *testing.T) {
 				Method:      http.MethodPost,
 				URL:         server.URL + "/value",
 				contentType: "application/json",
-				Body:        "{\"type\":\"counter\",\"id\":\"A\"}",
+				Body:        []byte("{\"type\":\"counter\",\"id\":\"A\"}"),
+			},
+			wantStatusCode: http.StatusOK,
+			wantAnswer:     "{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}",
+		},
+		{
+			name: "common_counter_ok_encoding",
+			args: args{
+				Method:          http.MethodPost,
+				URL:             server.URL + "/value",
+				contentType:     "application/json",
+				contentEncoding: true,
+				Body:            Encode([]byte("{\"type\":\"counter\",\"id\":\"A\"}")),
 			},
 			wantStatusCode: http.StatusOK,
 			wantAnswer:     "{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}",
@@ -372,7 +415,7 @@ func TestGetMetricShortForm(t *testing.T) {
 				Method:      http.MethodPost,
 				URL:         server.URL + "/value",
 				contentType: "application/json",
-				Body:        "{\"type\":\"gauge\",\"id\":\"B\"}",
+				Body:        []byte("{\"type\":\"gauge\",\"id\":\"B\"}"),
 			},
 			wantStatusCode: http.StatusOK,
 			wantAnswer:     "{\"id\":\"B\",\"type\":\"gauge\",\"value\":17}",
@@ -383,7 +426,7 @@ func TestGetMetricShortForm(t *testing.T) {
 				Method:      http.MethodPost,
 				URL:         server.URL + "/value",
 				contentType: "application/json",
-				Body:        "{\"id\":\"C\",\"type\":\"counter\"}",
+				Body:        []byte("{\"id\":\"C\",\"type\":\"counter\"}"),
 			},
 			wantStatusCode: http.StatusNotFound,
 			wantAnswer:     "There is no metric like this: 'C'",
@@ -394,7 +437,7 @@ func TestGetMetricShortForm(t *testing.T) {
 				Method:      http.MethodPost,
 				URL:         server.URL + "/value",
 				contentType: "application/json",
-				Body:        "{\"type\":\"counter\",\"id\":\"B\"}",
+				Body:        []byte("{\"type\":\"counter\",\"id\":\"B\"}"),
 			},
 			wantStatusCode: http.StatusNotFound,
 			wantAnswer:     "It has other metric type: 'gauge'",
@@ -425,7 +468,7 @@ func TestGetMetricShortForm(t *testing.T) {
 				Method:      http.MethodGet,
 				URL:         server.URL + "/value",
 				contentType: "application/json",
-				Body:        "{\"type\":\"gauge\",\"id\":\"B\"}",
+				Body:        []byte("{\"type\":\"gauge\",\"id\":\"B\"}"),
 			},
 			wantStatusCode: http.StatusMethodNotAllowed,
 			wantAnswer:     "",
@@ -435,6 +478,9 @@ func TestGetMetricShortForm(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := resty.New()
 			r := c.R().ForceContentType(tt.args.contentType).SetBody(tt.args.Body)
+			if tt.args.contentEncoding {
+				r.SetHeader("Content-Encoding", "gzip")
+			}
 			var resp *resty.Response
 			var err error
 			switch tt.args.Method {

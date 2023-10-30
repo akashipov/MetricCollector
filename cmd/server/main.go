@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/akashipov/MetricCollector/internal/server"
-	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/akashipov/MetricCollector/internal/server"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -21,7 +22,7 @@ func main() {
 	}
 	defer logger.Sync()
 	sugar = *logger.Sugar()
-	srv := &http.Server{Handler: server.ServerRouter(&sugar)}
+	srv := &http.Server{Handler: server.GzipHandle(server.ServerRouter(&sugar))}
 
 	done := make(chan bool, 1)
 

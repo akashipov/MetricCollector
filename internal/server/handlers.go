@@ -2,9 +2,11 @@ package server
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"sort"
@@ -88,10 +90,17 @@ func UpdateShortForm(w http.ResponseWriter, request *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	err = json.Unmarshal(buf.Bytes(), &metric)
+	data := buf.Bytes()
+	data, err = Decode(&w, request, data)
+	if err != nil {
+		fmt.Println(err.Error())
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	err = json.Unmarshal(data, &metric)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(err.Error()))
+		w.Write([]byte(fmt.Sprintf("Unmarshal problem: %s", err.Error())))
 		return
 	}
 	MetricType := metric.MType
@@ -164,16 +173,69 @@ func MainPage(w http.ResponseWriter, request *http.Request) {
 	}
 }
 
+func GzipHandle(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if !strings.Contains(r.Header.Get("Content-Type"), "application/json") &&
+			!strings.Contains(r.Header.Get("Content-Type"), "text/html") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+		if err != nil {
+			io.WriteString(w, err.Error())
+			return
+		}
+		defer gz.Close()
+
+		w.Header().Set("Content-Encoding", "gzip")
+		next.ServeHTTP(general.GzipWriter{ResponseWriter: w, Writer: gz}, r)
+	})
+}
+
+func Decode(w *http.ResponseWriter, request *http.Request, data []byte) ([]byte, error) {
+	if strings.Contains(request.Header.Get("Content-Encoding"), "gzip") {
+		reader := bytes.NewReader(data)
+		gzreader, err := gzip.NewReader(reader)
+		if err != nil {
+			(*w).WriteHeader(http.StatusBadGateway)
+			fmt.Println(err.Error())
+			return nil, err
+		}
+		data, err = io.ReadAll(gzreader)
+		if err != nil {
+			(*w).WriteHeader(http.StatusBadGateway)
+			fmt.Println(err.Error())
+			return nil, err
+		}
+	}
+	return data, nil
+}
+
 func GetMetricShortForm(w http.ResponseWriter, request *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
 	var buf bytes.Buffer
 	var metric general.Metrics
 	_, err := buf.ReadFrom(request.Body)
+	defer request.Body.Close()
 	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		fmt.Println(err.Error())
 		return
 	}
-	json.Unmarshal(buf.Bytes(), &metric)
+	data := buf.Bytes()
+	data, err = Decode(&w, request, data)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Println(err.Error())
+		return
+	}
+	json.Unmarshal(data, &metric)
 	MetricName := metric.ID
 	MetricType := metric.MType
 	var answer []byte
