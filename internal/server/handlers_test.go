@@ -632,7 +632,7 @@ func TestGetMetric(t *testing.T) {
 				panic(err)
 			}
 			if tt.args.acceptEncoding {
-				assert.Equal(t, resp.Header().Get("Content-Encoding"), "")
+				assert.Equal(t, resp.Header().Get("Content-Encoding"), "gzip")
 			}
 			assert.EqualValues(t, tt.wantStatusCode, resp.StatusCode())
 			assert.Contains(
