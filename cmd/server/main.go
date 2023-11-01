@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/akashipov/MetricCollector/internal/server"
 	"go.uber.org/zap"
@@ -51,10 +53,44 @@ func main() {
 	fmt.Println("exiting")
 }
 
+func Storage() {
+	tickerStorageInterval := time.NewTicker(time.Duration(*server.PTSave) * time.Second)
+	defer tickerStorageInterval.Stop()
+	for {
+		select {
+		case <-tickerStorageInterval.C:
+			f, err := os.Create(*server.FSPath)
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			b, err := json.Marshal(*server.MapMetric)
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			f.Write(b)
+			fmt.Println("Metrics are saved!")
+		}
+	}
+}
+
 func run(srv *http.Server) {
 	server.ParseArgsServer()
 	srv.Addr = *server.HPServer
 	fmt.Printf("Server is running on %s...\n", *server.HPServer)
+	go Storage()
+	if *server.StartLoadMetric {
+		b, err := os.ReadFile(*server.FSPath)
+		if err == nil {
+			err = json.Unmarshal(b, server.MapMetric)
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			fmt.Println("Metrics are successfully loaded..")
+		}
+	}
 	err := srv.ListenAndServe()
 	if err != http.ErrServerClosed {
 		log.Fatalf("HTTP server ListenAndServe: %v", err)

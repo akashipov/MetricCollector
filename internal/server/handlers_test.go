@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/akashipov/MetricCollector/internal/agent"
 	"github.com/akashipov/MetricCollector/internal/general"
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
@@ -43,14 +43,39 @@ func (r *CustomResponseWriter) Header() http.Header {
 
 func TestSaveMetric(t *testing.T) {
 	type args struct {
-		w          http.ResponseWriter
-		metric     general.Metric
-		metricName string
+		w      http.ResponseWriter
+		metric *general.Metrics
 	}
-	var commonMetric1 general.Metric = general.NewCounter(int64(10))
-	var commonMetric2 general.Metric = general.NewCounter(int64(7))
-	var commonMetric3 general.Metric = general.NewCounter(int64(26))
-	var commonMetric4 general.Metric = general.NewGauge(float64(13))
+	i := int64(10)
+	commonMetric1 := &general.Metrics{
+		ID:    "Blabla1",
+		MType: agent.COUNTER,
+		Delta: &i,
+	}
+	i = int64(7)
+	commonMetric2 := &general.Metrics{
+		ID:    "Blabla2",
+		MType: agent.COUNTER,
+		Delta: &i,
+	}
+	i = int64(13)
+	commonMetric3Before := &general.Metrics{
+		ID:    "Blabla3",
+		MType: agent.COUNTER,
+		Delta: &i,
+	}
+	i = int64(26)
+	commonMetric3 := &general.Metrics{
+		ID:    "Blabla3",
+		MType: agent.COUNTER,
+		Delta: &i,
+	}
+	f := float64(13)
+	commonMetric4 := &general.Metrics{
+		ID:    "Blabla4",
+		MType: agent.GAUGE,
+		Value: &f,
+	}
 	var customWriter http.ResponseWriter = &CustomResponseWriter{}
 	tests := []struct {
 		name            string
@@ -58,55 +83,51 @@ func TestSaveMetric(t *testing.T) {
 		triggerCount    int
 		BaseDirEnvValue string
 		wantStatusCode  []string
-		wantMap         map[string]general.Metric
+		wantMap         []general.Metrics
 	}{
 		{
 			name: "common1",
 			args: args{
 				customWriter,
 				commonMetric1,
-				"Blabla1",
 			},
 			triggerCount:    1,
 			BaseDirEnvValue: t.TempDir(),
 			wantStatusCode:  []string{StatusOK},
-			wantMap:         map[string]general.Metric{"Blabla1": commonMetric1},
+			wantMap:         []general.Metrics{*commonMetric1},
 		},
 		{
 			name: "common2",
 			args: args{
 				customWriter,
 				commonMetric2,
-				"Blabla2",
 			},
 			triggerCount:    1,
 			BaseDirEnvValue: filepath.Join(t.TempDir(), "test_folder"),
 			wantStatusCode:  []string{StatusOK},
-			wantMap:         map[string]general.Metric{"Blabla2": commonMetric2},
+			wantMap:         []general.Metrics{*commonMetric2},
 		},
 		{
 			name: "common_counter_repeated",
 			args: args{
 				customWriter,
-				general.NewCounter(int64(13)),
-				"Blabla3",
+				commonMetric3Before,
 			},
 			triggerCount:    2,
 			BaseDirEnvValue: t.TempDir(),
 			wantStatusCode:  []string{StatusOK},
-			wantMap:         map[string]general.Metric{"Blabla3": commonMetric3},
+			wantMap:         []general.Metrics{*commonMetric3},
 		},
 		{
 			name: "common_gauge_repeated",
 			args: args{
 				customWriter,
 				commonMetric4,
-				"Blabla4",
 			},
 			triggerCount:    2,
 			BaseDirEnvValue: t.TempDir(),
 			wantStatusCode:  []string{StatusOK},
-			wantMap:         map[string]general.Metric{"Blabla4": commonMetric4},
+			wantMap:         []general.Metrics{*commonMetric4},
 		},
 	}
 
@@ -114,17 +135,17 @@ func TestSaveMetric(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv(tt.BaseDirEnvValue, t.TempDir())
 			for i := 0; i < tt.triggerCount; i++ {
-				SaveMetric(tt.args.w, tt.args.metric, tt.args.metricName)
+				SaveMetric(tt.args.w, tt.args.metric)
 			}
 			header := customWriter.Header()
 			assert.EqualValues(t, tt.wantStatusCode, header["Status-Code"])
-			assert.Equal(t, len(MapMetric.m), len(tt.wantMap))
+			assert.Equal(t, len(MapMetric.MetricList), len(tt.wantMap))
 			for k, v := range tt.wantMap {
-				actualValue, ok := MapMetric.m[k]
-				require.True(t, ok)
-				assert.Equal(t, v.GetValue(), actualValue.GetValue())
+				actualValue := MapMetric.MetricList[k]
+				assert.Equal(t, v.Delta, actualValue.Delta)
+				assert.Equal(t, v.Value, actualValue.Value)
 			}
-			MapMetric.m = make(map[string]general.Metric)
+			MapMetric.MetricList = make([]*general.Metrics, 0)
 		})
 	}
 }
@@ -222,7 +243,7 @@ func TestUpdate(t *testing.T) {
 				resp.String(),
 				tt.wantAnswer,
 			)
-			MapMetric.m = make(map[string]general.Metric)
+			MapMetric.MetricList = make([]*general.Metrics, 0)
 		})
 	}
 }
@@ -354,7 +375,7 @@ func TestUpdateShortForm(t *testing.T) {
 				resp.String(),
 				tt.wantAnswer,
 			)
-			MapMetric.m = make(map[string]general.Metric)
+			MapMetric.MetricList = make([]*general.Metrics, 0)
 		})
 	}
 }
@@ -374,11 +395,16 @@ func TestGetMetricShortForm(t *testing.T) {
 	defer logger.Sync()
 	s := *logger.Sugar()
 	server := httptest.NewServer(ServerRouter(&s))
+
+	MapMetric.MetricList = make([]*general.Metrics, 0)
 	a := int64(10)
-	MapMetric.m = make(map[string]general.Metric)
-	MapMetric.m["A"] = general.NewCounter(a)
+	MapMetric.MetricList = append(
+		MapMetric.MetricList, &general.Metrics{ID: "A", MType: agent.COUNTER, Delta: &a},
+	)
 	b := float64(17)
-	MapMetric.m["B"] = general.NewGauge(b)
+	MapMetric.MetricList = append(
+		MapMetric.MetricList, &general.Metrics{ID: "B", MType: agent.GAUGE, Value: &b},
+	)
 	defer server.Close()
 	tests := []struct {
 		name           string
@@ -450,7 +476,7 @@ func TestGetMetricShortForm(t *testing.T) {
 				contentType: "application/json",
 			},
 			wantStatusCode: http.StatusOK,
-			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17</li></ul></html>",
+			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17.000000</li></ul></html>",
 		},
 		{
 			name: "common_not_allowed_get_base",
@@ -519,10 +545,14 @@ func TestGetMetric(t *testing.T) {
 	s := *logger.Sugar()
 	server := httptest.NewServer(ServerRouter(&s))
 	a := int64(10)
-	MapMetric.m = make(map[string]general.Metric)
-	MapMetric.m["A"] = general.NewCounter(a)
+	MapMetric.MetricList = make([]*general.Metrics, 0)
+	MapMetric.MetricList = append(
+		MapMetric.MetricList, &general.Metrics{ID: "A", MType: agent.COUNTER, Delta: &a},
+	)
 	b := float64(17)
-	MapMetric.m["B"] = general.NewGauge(b)
+	MapMetric.MetricList = append(
+		MapMetric.MetricList, &general.Metrics{ID: "B", MType: agent.GAUGE, Value: &b},
+	)
 	defer server.Close()
 	tests := []struct {
 		name           string
@@ -578,7 +608,7 @@ func TestGetMetric(t *testing.T) {
 				contentType: "text/plain",
 			},
 			wantStatusCode: http.StatusOK,
-			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17</li></ul></html>",
+			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17.000000</li></ul></html>",
 		},
 		{
 			name: "common_gauge_base_dir_encoding",
@@ -589,7 +619,7 @@ func TestGetMetric(t *testing.T) {
 				acceptEncoding: true,
 			},
 			wantStatusCode: http.StatusOK,
-			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17</li></ul></html>",
+			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17.000000</li></ul></html>",
 		},
 		{
 			name: "common_not_allowed_post_base",

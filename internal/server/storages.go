@@ -7,20 +7,33 @@ import (
 )
 
 type MemStorage struct {
-	m map[string]general.Metric
+	MetricList []*general.Metrics `json:"metrics"`
+}
+
+func (m *MemStorage) Get(metricName string) *general.Metrics {
+	for _, val := range MapMetric.MetricList {
+		if val.ID == metricName {
+			return val
+		}
+	}
+	return nil
 }
 
 func (r *MemStorage) String() string {
 	s := ""
-	for k, v := range r.m {
-		s += fmt.Sprintf("key: %s -> value: %v\n", k, v.GetValue())
+	for _, v := range r.MetricList {
+		if v.Delta != nil {
+			s += fmt.Sprintf("key: %s -> value: %d\n", v.ID, *v.Delta)
+		} else {
+			s += fmt.Sprintf("key: %s -> value: %f\n", v.ID, *v.Value)
+		}
 	}
 	return s
 }
 
-func NewStorage(vMap map[string]general.Metric) *MemStorage {
+func NewStorage(vMap []*general.Metrics) *MemStorage {
 	if vMap == nil {
-		return &MemStorage{map[string]general.Metric{}}
+		return &MemStorage{make([]*general.Metrics, 0)}
 	}
 	return &MemStorage{vMap}
 }
