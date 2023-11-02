@@ -7,14 +7,13 @@ import (
 )
 
 type MemStorage struct {
-	MetricList []*general.Metrics `json:"metrics"`
+	MetricList map[string]*general.Metrics `json:"metrics"`
 }
 
 func (r *MemStorage) Get(metricName string) *general.Metrics {
-	for _, val := range r.MetricList {
-		if val.ID == metricName {
-			return val
-		}
+	val, ok := r.MetricList[metricName]
+	if ok {
+		return val
 	}
 	return nil
 }
@@ -31,9 +30,9 @@ func (r *MemStorage) String() string {
 	return s
 }
 
-func NewStorage(vMap []*general.Metrics) *MemStorage {
+func NewStorage(vMap map[string]*general.Metrics) *MemStorage {
 	if vMap == nil {
-		return &MemStorage{make([]*general.Metrics, 0)}
+		return &MemStorage{make(map[string]*general.Metrics, 0)}
 	}
 	return &MemStorage{vMap}
 }

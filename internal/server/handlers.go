@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -68,17 +67,19 @@ func SaveMetric(w http.ResponseWriter, metric *general.Metrics) error {
 		switch metric.MType {
 		case agent.COUNTER:
 			if val.Delta == nil {
-				*val.Delta = *metric.Delta
+				val.Delta = metric.Delta
 			} else {
 				*val.Delta += *metric.Delta
 			}
+			val.MType = agent.COUNTER
 			val.Value = nil
 		case agent.GAUGE:
-			*val.Value = *metric.Value
+			val.Value = metric.Value
+			val.MType = agent.GAUGE
 			val.Delta = nil
 		}
 	} else {
-		MapMetric.MetricList = append(MapMetric.MetricList, metric)
+		MapMetric.MetricList[metric.ID] = metric
 	}
 	w.WriteHeader(http.StatusOK)
 	return nil
@@ -117,7 +118,6 @@ func UpdateShortForm(w http.ResponseWriter, request *http.Request) {
 	case agent.COUNTER:
 		MetricValue = *metric.Delta
 	default:
-		print(errors.New("wrong type of metric type"))
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte(fmt.Sprintf("Wrong type of metric: '%s'", MetricType)))
 		return

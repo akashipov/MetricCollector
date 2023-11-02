@@ -140,12 +140,12 @@ func TestSaveMetric(t *testing.T) {
 			header := customWriter.Header()
 			assert.EqualValues(t, tt.wantStatusCode, header["Status-Code"])
 			assert.Equal(t, len(MapMetric.MetricList), len(tt.wantMap))
-			for k, v := range tt.wantMap {
-				actualValue := MapMetric.MetricList[k]
+			for _, v := range tt.wantMap {
+				actualValue := MapMetric.MetricList[v.ID]
 				assert.Equal(t, v.Delta, actualValue.Delta)
 				assert.Equal(t, v.Value, actualValue.Value)
 			}
-			MapMetric.MetricList = make([]*general.Metrics, 0)
+			MapMetric.MetricList = make(map[string]*general.Metrics, 0)
 		})
 	}
 }
@@ -243,7 +243,7 @@ func TestUpdate(t *testing.T) {
 				resp.String(),
 				tt.wantAnswer,
 			)
-			MapMetric.MetricList = make([]*general.Metrics, 0)
+			MapMetric.MetricList = make(map[string]*general.Metrics, 0)
 		})
 	}
 }
@@ -375,7 +375,7 @@ func TestUpdateShortForm(t *testing.T) {
 				resp.String(),
 				tt.wantAnswer,
 			)
-			MapMetric.MetricList = make([]*general.Metrics, 0)
+			MapMetric.MetricList = make(map[string]*general.Metrics, 0)
 		})
 	}
 }
@@ -396,15 +396,11 @@ func TestGetMetricShortForm(t *testing.T) {
 	s := *logger.Sugar()
 	server := httptest.NewServer(ServerRouter(&s))
 
-	MapMetric.MetricList = make([]*general.Metrics, 0)
+	MapMetric.MetricList = make(map[string]*general.Metrics, 0)
 	a := int64(10)
-	MapMetric.MetricList = append(
-		MapMetric.MetricList, &general.Metrics{ID: "A", MType: agent.COUNTER, Delta: &a},
-	)
+	MapMetric.MetricList["A"] = &general.Metrics{ID: "A", MType: agent.COUNTER, Delta: &a}
 	b := float64(17)
-	MapMetric.MetricList = append(
-		MapMetric.MetricList, &general.Metrics{ID: "B", MType: agent.GAUGE, Value: &b},
-	)
+	MapMetric.MetricList["B"] = &general.Metrics{ID: "B", MType: agent.GAUGE, Value: &b}
 	defer server.Close()
 	tests := []struct {
 		name           string
@@ -545,14 +541,10 @@ func TestGetMetric(t *testing.T) {
 	s := *logger.Sugar()
 	server := httptest.NewServer(ServerRouter(&s))
 	a := int64(10)
-	MapMetric.MetricList = make([]*general.Metrics, 0)
-	MapMetric.MetricList = append(
-		MapMetric.MetricList, &general.Metrics{ID: "A", MType: agent.COUNTER, Delta: &a},
-	)
+	MapMetric.MetricList = make(map[string]*general.Metrics, 0)
+	MapMetric.MetricList["A"] = &general.Metrics{ID: "A", MType: agent.COUNTER, Delta: &a}
 	b := float64(17)
-	MapMetric.MetricList = append(
-		MapMetric.MetricList, &general.Metrics{ID: "B", MType: agent.GAUGE, Value: &b},
-	)
+	MapMetric.MetricList["B"] = &general.Metrics{ID: "B", MType: agent.GAUGE, Value: &b}
 	defer server.Close()
 	tests := []struct {
 		name           string

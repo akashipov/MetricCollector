@@ -9,7 +9,7 @@ import (
 
 func TestMemStorage_String(t *testing.T) {
 	type fields struct {
-		m []*general.Metrics
+		m map[string]*general.Metrics
 	}
 	var m int64 = 1
 	a := general.Metrics{ID: "a", MType: agent.COUNTER, Delta: &m}
@@ -23,15 +23,15 @@ func TestMemStorage_String(t *testing.T) {
 		{
 			name: "one",
 			fields: fields{
-				m: []*general.Metrics{&a},
+				m: map[string]*general.Metrics{a.ID: &a},
 			},
 			want: []string{"key: a -> value: 1\n"},
 		},
 		{
 			name: "several",
 			fields: fields{
-				m: []*general.Metrics{
-					&a, &b,
+				m: map[string]*general.Metrics{
+					a.ID: &a, b.ID: &b,
 				},
 			},
 			want: []string{"key: a -> value: 1\nkey: b -> value: 2\n", "key: b -> value: 2\nkey: a -> value: 1\n"},
