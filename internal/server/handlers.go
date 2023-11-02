@@ -150,11 +150,6 @@ func UpdateShortForm(w http.ResponseWriter, request *http.Request) {
 			metric.Value = val.Value
 		}
 	}
-
-	if err != nil {
-		w.WriteHeader(http.StatusBadGateway)
-		fmt.Printf("error - %s", err.Error())
-	}
 	w.WriteHeader(http.StatusOK)
 	b, err := json.Marshal(metric)
 	if err != nil {

@@ -12,9 +12,9 @@ func TestMemStorage_String(t *testing.T) {
 		m []*general.Metrics
 	}
 	var m int64 = 1
-	var a general.Metrics = general.Metrics{ID: "a", MType: agent.COUNTER, Delta: &m}
+	a := general.Metrics{ID: "a", MType: agent.COUNTER, Delta: &m}
 	var newM int64 = 2
-	var b general.Metrics = general.Metrics{ID: "b", MType: agent.COUNTER, Delta: &newM}
+	b := general.Metrics{ID: "b", MType: agent.COUNTER, Delta: &newM}
 	tests := []struct {
 		name   string
 		fields fields

@@ -10,8 +10,8 @@ type MemStorage struct {
 	MetricList []*general.Metrics `json:"metrics"`
 }
 
-func (m *MemStorage) Get(metricName string) *general.Metrics {
-	for _, val := range MapMetric.MetricList {
+func (r *MemStorage) Get(metricName string) *general.Metrics {
+	for _, val := range r.MetricList {
 		if val.ID == metricName {
 			return val
 		}
