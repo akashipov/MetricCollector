@@ -72,12 +72,10 @@ func SaveMetric(w http.ResponseWriter, metric *general.Metrics) error {
 			} else {
 				*val.Delta += *metric.Delta
 			}
+			val.Value = nil
 		case agent.GAUGE:
-			if val.Value == nil {
-				*val.Value = *metric.Value
-			} else {
-				*val.Value += *metric.Value
-			}
+			*val.Value = *metric.Value
+			val.Delta = nil
 		}
 	} else {
 		MapMetric.MetricList = append(MapMetric.MetricList, metric)
@@ -165,7 +163,7 @@ func MainPage(w http.ResponseWriter, request *http.Request) {
 	ul := "<ul>"
 	for _, k := range MapMetric.MetricList {
 		if k.MType == agent.GAUGE {
-			ul += fmt.Sprintf("<li>%v: %f</li>", k.ID, *k.Value)
+			ul += fmt.Sprintf("<li>%v: %v</li>", k.ID, *k.Value)
 		}
 		if k.MType == agent.COUNTER {
 			ul += fmt.Sprintf("<li>%v: %d</li>", k.ID, *k.Delta)
@@ -291,7 +289,7 @@ func GetMetric(w http.ResponseWriter, request *http.Request) {
 		if val.MType == MetricType {
 			w.WriteHeader(http.StatusOK)
 			if val.MType == agent.GAUGE {
-				answer = fmt.Sprintf("%f", *val.Value)
+				answer = fmt.Sprintf("%v", *val.Value)
 			} else {
 				answer = fmt.Sprintf("%d", *val.Delta)
 			}

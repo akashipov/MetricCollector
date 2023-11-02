@@ -476,7 +476,7 @@ func TestGetMetricShortForm(t *testing.T) {
 				contentType: "application/json",
 			},
 			wantStatusCode: http.StatusOK,
-			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17.000000</li></ul></html>",
+			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17</li></ul></html>",
 		},
 		{
 			name: "common_not_allowed_get_base",
@@ -608,7 +608,7 @@ func TestGetMetric(t *testing.T) {
 				contentType: "text/plain",
 			},
 			wantStatusCode: http.StatusOK,
-			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17.000000</li></ul></html>",
+			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17</li></ul></html>",
 		},
 		{
 			name: "common_gauge_base_dir_encoding",
@@ -619,7 +619,7 @@ func TestGetMetric(t *testing.T) {
 				acceptEncoding: true,
 			},
 			wantStatusCode: http.StatusOK,
-			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17.000000</li></ul></html>",
+			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17</li></ul></html>",
 		},
 		{
 			name: "common_not_allowed_post_base",
