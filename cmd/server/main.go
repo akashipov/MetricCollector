@@ -57,21 +57,19 @@ func Storage() {
 	tickerStorageInterval := time.NewTicker(time.Duration(*server.PTSave) * time.Second)
 	defer tickerStorageInterval.Stop()
 	for {
-		select {
-		case <-tickerStorageInterval.C:
-			f, err := os.Create(*server.FSPath)
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
-			b, err := json.Marshal(*server.MapMetric)
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
-			f.Write(b)
-			fmt.Println("Metrics are saved!")
+		<-tickerStorageInterval.C
+		f, err := os.Create(*server.FSPath)
+		if err != nil {
+			fmt.Println(err.Error())
+			return
 		}
+		b, err := json.Marshal(*server.MapMetric)
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+		f.Write(b)
+		fmt.Println("Metrics are saved!")
 	}
 }
 
