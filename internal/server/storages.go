@@ -1,22 +1,38 @@
 package server
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/akashipov/MetricCollector/internal/general"
+)
 
 type MemStorage struct {
-	m map[string]Metric
+	MetricList map[string]*general.Metrics `json:"metrics"`
+}
+
+func (r *MemStorage) Get(metricName string) *general.Metrics {
+	val, ok := r.MetricList[metricName]
+	if ok {
+		return val
+	}
+	return nil
 }
 
 func (r *MemStorage) String() string {
 	s := ""
-	for k, v := range r.m {
-		s += fmt.Sprintf("key: %s -> value: %v\n", k, v.GetValue())
+	for _, v := range r.MetricList {
+		if v.Delta != nil {
+			s += fmt.Sprintf("key: %s -> value: %d\n", v.ID, *v.Delta)
+		} else {
+			s += fmt.Sprintf("key: %s -> value: %f\n", v.ID, *v.Value)
+		}
 	}
 	return s
 }
 
-func NewStorage(vMap map[string]Metric) *MemStorage {
+func NewStorage(vMap map[string]*general.Metrics) *MemStorage {
 	if vMap == nil {
-		return &MemStorage{map[string]Metric{}}
+		return &MemStorage{make(map[string]*general.Metrics, 0)}
 	}
 	return &MemStorage{vMap}
 }

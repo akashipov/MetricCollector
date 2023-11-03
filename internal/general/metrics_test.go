@@ -1,9 +1,10 @@
-package server
+package general
 
 import (
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCounter_GetValue(t *testing.T) {

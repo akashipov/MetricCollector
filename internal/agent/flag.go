@@ -3,9 +3,10 @@ package agent
 import (
 	"flag"
 	"fmt"
-	"github.com/caarlos0/env/v6"
 	"log"
 	"strings"
+
+	"github.com/caarlos0/env/v6"
 )
 
 var HPClient *string
