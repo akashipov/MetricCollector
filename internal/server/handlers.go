@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,7 +19,7 @@ import (
 
 func ServerRouter(s *zap.SugaredLogger) http.Handler {
 	r := chi.NewRouter()
-	r.Get("/", MainPage)
+	r.Get("/", logger.WithLogging(http.HandlerFunc(MainPage), s))
 	r.Route(
 		"/update",
 		func(r chi.Router) {
@@ -50,7 +51,7 @@ func Update(w http.ResponseWriter, request *http.Request) {
 	MetricType := chi.URLParam(request, "MetricType")
 	MetricName := chi.URLParam(request, "MetricName")
 	MetricValue := chi.URLParam(request, "MetricValue")
-	m, err := ValidateMetric(&w, MetricType, MetricValue, MetricName)
+	m, err := ValidateMetric(w, MetricType, MetricValue, MetricName)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -81,26 +82,24 @@ func SaveMetric(w http.ResponseWriter, metric *general.Metrics) error {
 	} else {
 		MapMetric.MetricList[metric.ID] = metric
 	}
-	w.WriteHeader(http.StatusOK)
 	return nil
 }
 
 func UpdateShortForm(w http.ResponseWriter, request *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	var buf bytes.Buffer
 	var metric general.Metrics
 	_, err := buf.ReadFrom(request.Body)
 	defer request.Body.Close()
 	if err != nil {
-		fmt.Println(err.Error())
 		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
 		return
 	}
 	data := buf.Bytes()
-	data, err = Decode(&w, request, data)
+	data, err = Decode(w, request, data)
 	if err != nil {
-		fmt.Println(err.Error())
 		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
 		return
 	}
 	err = json.Unmarshal(data, &metric)
@@ -122,9 +121,10 @@ func UpdateShortForm(w http.ResponseWriter, request *http.Request) {
 		w.Write([]byte(fmt.Sprintf("Wrong type of metric: '%s'", MetricType)))
 		return
 	}
-	m, err := ValidateMetric(&w, MetricType, MetricValue, MetricName)
+	m, err := ValidateMetric(w, MetricType, MetricValue, MetricName)
 	if err != nil {
-		fmt.Println(err.Error())
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
 		return
 	}
 	if m == nil {
@@ -134,7 +134,7 @@ func UpdateShortForm(w http.ResponseWriter, request *http.Request) {
 	err = SaveMetric(w, m)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Println(err.Error())
+		w.Write([]byte(err.Error()))
 		return
 	}
 	val := MapMetric.Get(MetricName)
@@ -148,18 +148,34 @@ func UpdateShortForm(w http.ResponseWriter, request *http.Request) {
 			metric.Value = val.Value
 		}
 	}
-	w.WriteHeader(http.StatusOK)
 	b, err := json.Marshal(metric)
 	if err != nil {
+		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusBadGateway)
-		fmt.Println(err.Error())
+		w.Write([]byte(err.Error()))
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(b)
 }
 
+func СheckContentType(w http.ResponseWriter, request *http.Request, pattern string) error {
+	contentType := request.Header.Get("Content-Type")
+	fmt.Printf("Content-type has been got: '%s'\n", contentType)
+	if !strings.Contains(contentType, pattern) {
+		w.WriteHeader(http.StatusBadRequest)
+		msg := "Bad type of content-type, please change it"
+		w.Write([]byte(msg))
+		return errors.New(msg)
+	}
+	return nil
+}
+
 func MainPage(w http.ResponseWriter, request *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
+	err := СheckContentType(w, request, "text/plain")
+	if err != nil {
+		return
+	}
 	ul := "<ul>"
 	for _, k := range MapMetric.MetricList {
 		if k.MType == agent.GAUGE {
@@ -171,7 +187,7 @@ func MainPage(w http.ResponseWriter, request *http.Request) {
 	}
 	ul += "</ul>"
 	html := fmt.Sprintf("<html>%s</html>", ul)
-	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html")
 	status, err := w.Write([]byte(html))
 	if err != nil {
 		fmt.Printf("%v: %v", status, err.Error())
@@ -181,17 +197,10 @@ func MainPage(w http.ResponseWriter, request *http.Request) {
 func GzipHandle(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			fmt.Println("Skip gzip... content-type =", r.Header.Get("Content-Type"))
 			next.ServeHTTP(w, r)
 			return
 		}
-		// contentType := w.Header().Get("Content-Type")
-		// fmt.Printf("Content-Type of response: '%s'\n", contentType)
-		// if !strings.Contains(contentType, "application/json") &&
-		// 	!strings.Contains(contentType, "text/html") {
-		// 	next.ServeHTTP(w, r)
-		// 	return
-		// }
-
 		gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
 		if err != nil {
 			io.WriteString(w, err.Error())
@@ -199,23 +208,22 @@ func GzipHandle(next http.Handler) http.Handler {
 		}
 		defer gz.Close()
 
-		w.Header().Set("Content-Encoding", "gzip")
-		next.ServeHTTP(general.GzipWriter{ResponseWriter: w, Writer: gz}, r)
+		next.ServeHTTP(general.GzipWriter{OldW: w, Writer: gz}, r)
 	})
 }
 
-func Decode(w *http.ResponseWriter, request *http.Request, data []byte) ([]byte, error) {
+func Decode(w http.ResponseWriter, request *http.Request, data []byte) ([]byte, error) {
 	if strings.Contains(request.Header.Get("Content-Encoding"), "gzip") {
 		reader := bytes.NewReader(data)
 		gzreader, err := gzip.NewReader(reader)
 		if err != nil {
-			(*w).WriteHeader(http.StatusBadGateway)
+			w.WriteHeader(http.StatusBadGateway)
 			fmt.Println(err.Error())
 			return nil, err
 		}
 		data, err = io.ReadAll(gzreader)
 		if err != nil {
-			(*w).WriteHeader(http.StatusBadGateway)
+			w.WriteHeader(http.StatusBadGateway)
 			fmt.Println(err.Error())
 			return nil, err
 		}
@@ -224,11 +232,14 @@ func Decode(w *http.ResponseWriter, request *http.Request, data []byte) ([]byte,
 }
 
 func GetMetricShortForm(w http.ResponseWriter, request *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	err := СheckContentType(w, request, "application/json")
+	if err != nil {
+		return
+	}
 
 	var buf bytes.Buffer
 	var metric general.Metrics
-	_, err := buf.ReadFrom(request.Body)
+	_, err = buf.ReadFrom(request.Body)
 	defer request.Body.Close()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -236,7 +247,7 @@ func GetMetricShortForm(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	data := buf.Bytes()
-	data, err = Decode(&w, request, data)
+	data, err = Decode(w, request, data)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Println(err.Error())
@@ -249,7 +260,6 @@ func GetMetricShortForm(w http.ResponseWriter, request *http.Request) {
 	val := MapMetric.Get(MetricName)
 	if ok := val != nil; ok {
 		if val.MType == MetricType {
-			w.WriteHeader(http.StatusOK)
 			switch MetricType {
 			case agent.COUNTER:
 				metric.Delta = val.Delta
@@ -274,6 +284,7 @@ func GetMetricShortForm(w http.ResponseWriter, request *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		answer = []byte(fmt.Sprintf("There is no metric like this: '%v'", MetricName))
 	}
+	w.Header().Set("Content-Type", "application/json")
 	status, err := w.Write(answer)
 	if err != nil {
 		fmt.Printf("%v: %v", status, err.Error())
@@ -281,13 +292,17 @@ func GetMetricShortForm(w http.ResponseWriter, request *http.Request) {
 }
 
 func GetMetric(w http.ResponseWriter, request *http.Request) {
+	err := СheckContentType(w, request, "text/plain")
+	if err != nil {
+		return
+	}
 	MetricName := chi.URLParam(request, "MetricName")
 	MetricType := chi.URLParam(request, "MetricType")
 	var answer string
 	val := MapMetric.Get(MetricName)
 	if ok := val != nil; ok {
 		if val.MType == MetricType {
-			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "text/html")
 			if val.MType == agent.GAUGE {
 				answer = fmt.Sprintf("%v", *val.Value)
 			} else {

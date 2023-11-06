@@ -11,7 +11,7 @@ import (
 )
 
 func ValidateMetric(
-	w *http.ResponseWriter, MetricType string,
+	w http.ResponseWriter, MetricType string,
 	MetricValue interface{},
 	MetricName string,
 ) (*general.Metrics, error) {
@@ -30,8 +30,8 @@ func ValidateMetric(
 		}
 		n, ok := MetricValue.(float64)
 		if !ok {
-			(*w).WriteHeader(http.StatusBadRequest)
-			status, err = (*w).Write([]byte(badTypeValueMsg + fmt.Sprintf("float64: '%v'", MetricValue)))
+			w.WriteHeader(http.StatusBadRequest)
+			status, err = w.Write([]byte(badTypeValueMsg + fmt.Sprintf("float64: '%v'", MetricValue)))
 		} else {
 			return &general.Metrics{ID: MetricName, MType: MetricType, Value: &n}, nil
 		}
@@ -45,14 +45,14 @@ func ValidateMetric(
 		}
 		n, ok := MetricValue.(int64)
 		if !ok {
-			(*w).WriteHeader(http.StatusBadRequest)
-			status, err = (*w).Write([]byte(badTypeValueMsg + fmt.Sprintf("int64: '%v'", MetricValue)))
+			w.WriteHeader(http.StatusBadRequest)
+			status, err = w.Write([]byte(badTypeValueMsg + fmt.Sprintf("int64: '%v'", MetricValue)))
 		} else {
 			return &general.Metrics{ID: MetricName, MType: MetricType, Delta: &n}, nil
 		}
 	} else {
-		(*w).WriteHeader(http.StatusBadRequest)
-		status, err = (*w).Write(
+		w.WriteHeader(http.StatusBadRequest)
+		status, err = w.Write(
 			[]byte(
 				fmt.Sprintf("Wrong type of metric: '%s'", MetricType),
 			),

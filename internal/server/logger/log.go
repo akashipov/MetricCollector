@@ -55,7 +55,6 @@ func WithLogging(h http.Handler, s *zap.SugaredLogger) func(w http.ResponseWrite
 			"duration", duration,
 			"size", responseData.size,
 		)
-
 	}
 	return logFn
 }
