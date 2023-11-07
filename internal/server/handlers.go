@@ -164,7 +164,7 @@ func СheckContentType(w http.ResponseWriter, request *http.Request, pattern str
 	fmt.Printf("Content-type has been got: '%s'\n", contentType)
 	if !strings.Contains(contentType, pattern) {
 		w.WriteHeader(http.StatusBadRequest)
-		msg := "Bad type of content-type, please change it"
+		msg := "bad type of content-type, please change it"
 		w.Write([]byte(msg))
 		return errors.New(msg)
 	}

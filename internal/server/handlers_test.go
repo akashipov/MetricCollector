@@ -271,7 +271,10 @@ func DecodeBytes(data []byte) ([]byte, error) {
 		return []byte(""), errors.New("Create reader block: " + err.Error())
 	}
 	b, err := io.ReadAll(gz)
-	if err := gz.Close(); err != nil {
+	if err != nil {
+		return []byte(""), errors.New("Read reader block: " + err.Error())
+	}
+	if err = gz.Close(); err != nil {
 		return []byte(""), errors.New("Close reader block: " + err.Error())
 	}
 	return b, nil
