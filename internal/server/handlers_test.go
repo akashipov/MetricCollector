@@ -706,7 +706,7 @@ func TestGetMetricFull(t *testing.T) {
 				IsEncodedResp: false,
 			},
 			wantStatusCode: http.StatusBadRequest,
-			wantAnswer:     []string{"Bad type of content-type, please change it"},
+			wantAnswer:     []string{"bad type of content-type, please change it"},
 		},
 		{
 			name: "common_not_allowed_post_base_root",
