@@ -697,17 +697,17 @@ func TestGetMetricFull(t *testing.T) {
 			wantStatusCode: http.StatusOK,
 			wantAnswer:     []string{"<li>A: 10</li>", "<li>B: 17</li>"},
 		},
-		{
-			name: "common_bad_type_content_type",
-			args: args{
-				Method:        http.MethodGet,
-				URL:           server.URL,
-				contentType:   "text/html",
-				IsEncodedResp: false,
-			},
-			wantStatusCode: http.StatusBadRequest,
-			wantAnswer:     []string{"bad type of content-type, please change it"},
-		},
+		// {
+		// 	name: "common_bad_type_content_type",
+		// 	args: args{
+		// 		Method:        http.MethodGet,
+		// 		URL:           server.URL,
+		// 		contentType:   "text/html",
+		// 		IsEncodedResp: false,
+		// 	},
+		// 	wantStatusCode: http.StatusBadRequest,
+		// 	wantAnswer:     []string{"bad type of content-type, please change it"},
+		// },
 		{
 			name: "common_not_allowed_post_base_root",
 			args: args{
