@@ -19,7 +19,7 @@ type ServerEnvConfig struct {
 	StoreInterval      *int    `env:"STORE_INTERVAL"`
 	FileStoragePath    *string `env:"FILE_STORAGE_PATH"`
 	StartLoadMetric    *bool   `env:"RESTORE"`
-	ConnectionDbString *string `env:"DATABASE_DSN"`
+	ConnectionDBString *string `env:"DATABASE_DSN"`
 }
 
 func ParseArgsServer() {
@@ -50,8 +50,8 @@ func ParseArgsServer() {
 	if cfg.StartLoadMetric != nil {
 		StartLoadMetric = cfg.StartLoadMetric
 	}
-	if cfg.ConnectionDbString != nil {
-		PsqlInfo = cfg.ConnectionDbString
+	if cfg.ConnectionDBString != nil {
+		PsqlInfo = cfg.ConnectionDBString
 	}
 	fmt.Println("Connection string for psql:", *PsqlInfo)
 	fmt.Println("StartLoadMetric:", *StartLoadMetric)
