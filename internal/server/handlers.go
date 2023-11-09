@@ -19,6 +19,7 @@ import (
 
 func ServerRouter(s *zap.SugaredLogger) http.Handler {
 	r := chi.NewRouter()
+	r.Get("/ping", logger.WithLogging(http.HandlerFunc(TestConnection), s))
 	r.Get("/", logger.WithLogging(http.HandlerFunc(MainPage), s))
 	r.Route(
 		"/update",
@@ -192,6 +193,10 @@ func MainPage(w http.ResponseWriter, request *http.Request) {
 	if err != nil {
 		fmt.Printf("%v: %v", status, err.Error())
 	}
+}
+
+func TestConnection(w http.ResponseWriter, request *http.Request) {
+	TestConnectionPostgres(w, request)
 }
 
 func GzipHandle(next http.Handler) http.Handler {
