@@ -75,18 +75,27 @@ func Storage() {
 
 func run(srv *http.Server) {
 	server.ParseArgsServer()
+	if *server.PsqlInfo != "" {
+		server.InitDB()
+	}
 	srv.Addr = *server.HPServer
 	fmt.Printf("Server is running on %s...\n", *server.HPServer)
-	go Storage()
-	if *server.StartLoadMetric {
-		b, err := os.ReadFile(*server.FSPath)
-		if err == nil {
-			err = json.Unmarshal(b, server.MapMetric)
-			if err != nil {
-				fmt.Println(err.Error())
-				return
+	defer func() {
+		fmt.Println("Closing of db connection...")
+		server.DB.Close()
+	}()
+	if *server.PsqlInfo == "" {
+		go Storage()
+		if *server.StartLoadMetric {
+			b, err := os.ReadFile(*server.FSPath)
+			if err == nil {
+				err = json.Unmarshal(b, server.MapMetric)
+				if err != nil {
+					fmt.Println(err.Error())
+					return
+				}
+				fmt.Println("Metrics are successfully loaded..")
 			}
-			fmt.Println("Metrics are successfully loaded..")
 		}
 	}
 	err := srv.ListenAndServe()

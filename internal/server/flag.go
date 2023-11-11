@@ -33,7 +33,7 @@ func ParseArgsServer() {
 	FSPath = flag.String("f", "/tmp/metrics-db.json", "File storage path to json")
 	PsqlInfo = flag.String(
 		"d",
-		"host=localhost port=5432 user=postgres password=postgres dbname=metrics sslmode=disable",
+		"", // "host=localhost port=5432 user=postgres password=620631 dbname=metrics sslmode=disable",
 		"Connection string for psql",
 	)
 	StartLoadMetric = flag.Bool("r", true, "Either load last metric checkpoint")

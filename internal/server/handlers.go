@@ -60,11 +60,11 @@ func Update(w http.ResponseWriter, request *http.Request) {
 	if m == nil {
 		return
 	}
-	SaveMetric(w, m)
+	SaveMetric(w, m, request)
 }
 
-func SaveMetric(w http.ResponseWriter, metric *general.Metrics) error {
-	val := MapMetric.Get(metric.ID)
+func SaveMetric(w http.ResponseWriter, metric *general.Metrics, request *http.Request) error {
+	val := MapMetric.Get(metric.ID, request)
 	if val != nil {
 		switch metric.MType {
 		case agent.COUNTER:
@@ -81,8 +81,11 @@ func SaveMetric(w http.ResponseWriter, metric *general.Metrics) error {
 			val.Delta = nil
 		}
 	} else {
-		MapMetric.MetricList[metric.ID] = metric
+		val = metric
 	}
+	fmt.Println("Have got")
+	fmt.Println(val.ID, val.MType)
+	MapMetric.Record(val.ID, val, request)
 	return nil
 }
 
@@ -132,13 +135,13 @@ func UpdateShortForm(w http.ResponseWriter, request *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	err = SaveMetric(w, m)
+	err = SaveMetric(w, m, request)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(err.Error()))
 		return
 	}
-	val := MapMetric.Get(MetricName)
+	val := MapMetric.Get(MetricName, request)
 	switch MetricType {
 	case agent.COUNTER:
 		if val != nil {
@@ -262,7 +265,7 @@ func GetMetricShortForm(w http.ResponseWriter, request *http.Request) {
 	MetricName := metric.ID
 	MetricType := metric.MType
 	var answer []byte
-	val := MapMetric.Get(MetricName)
+	val := MapMetric.Get(MetricName, request)
 	if ok := val != nil; ok {
 		if val.MType == MetricType {
 			switch MetricType {
@@ -304,7 +307,7 @@ func GetMetric(w http.ResponseWriter, request *http.Request) {
 	MetricName := chi.URLParam(request, "MetricName")
 	MetricType := chi.URLParam(request, "MetricType")
 	var answer string
-	val := MapMetric.Get(MetricName)
+	val := MapMetric.Get(MetricName, request)
 	if ok := val != nil; ok {
 		if val.MType == MetricType {
 			w.Header().Set("Content-Type", "text/html")
