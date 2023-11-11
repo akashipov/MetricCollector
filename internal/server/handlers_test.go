@@ -137,7 +137,7 @@ func TestSaveMetric(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv(tt.BaseDirEnvValue, t.TempDir())
 			for i := 0; i < tt.triggerCount; i++ {
-				SaveMetric(tt.args.w, tt.args.metric)
+				SaveMetric(tt.args.w, tt.args.metric, &http.Request{})
 			}
 			header := customWriter.Header()
 			assert.EqualValues(t, tt.wantStatusCode, header["Status-Code"])
