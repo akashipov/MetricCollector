@@ -7,6 +7,10 @@ type Metrics struct {
 	Value *float64 `json:"value,omitempty"`
 }
 
+type SeveralMetrics struct {
+	Mtrcs []Metrics `json:"metrics"`
+}
+
 type Metric interface {
 	Update(interface{}) bool
 	GetValue() interface{}

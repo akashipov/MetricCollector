@@ -41,9 +41,12 @@ func (r *MemStorage) Get(metricName string, request *http.Request) *general.Metr
 	}
 }
 
-func (r *MemStorage) Record(name string, value *general.Metrics, request *http.Request) {
+func (r *MemStorage) Record(
+	value *general.Metrics, request *http.Request,
+	tx *sql.Tx,
+) {
 	if (PsqlInfo == nil) || (*PsqlInfo == "") {
-		MapMetric.MetricList[name] = value
+		MapMetric.MetricList[value.ID] = value
 	} else {
 		var v sql.NullFloat64
 		var delta sql.NullInt64
@@ -62,12 +65,23 @@ func (r *MemStorage) Record(name string, value *general.Metrics, request *http.R
 			v.Valid = false
 		}
 		fmt.Println(value.ID, value.MType, v, delta, DB, request.Context())
-		_, err := DB.ExecContext(
-			request.Context(),
-			"INSERT INTO metrics VALUES($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET mtype = $2, value = $3, delta = $4;", value.ID, value.MType, v, delta,
-		)
-		if err != nil {
-			fmt.Println(err.Error())
+		query := "INSERT INTO metrics VALUES($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET mtype = $2, value = $3, delta = $4;"
+		if tx != nil {
+			_, err := tx.ExecContext(
+				request.Context(),
+				query, value.ID, value.MType, v, delta,
+			)
+			if err != nil {
+				tx.Rollback()
+			}
+		} else {
+			_, err := DB.ExecContext(
+				request.Context(),
+				query, value.ID, value.MType, v, delta,
+			)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
 		}
 	}
 }

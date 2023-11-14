@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -44,6 +45,7 @@ func WithLogging(h http.Handler, s *zap.SugaredLogger) func(w http.ResponseWrite
 			ResponseWriter: w,
 			responseData:   responseData,
 		}
+		fmt.Println("Starting logging")
 		h.ServeHTTP(&lw, r)
 
 		duration := time.Since(start)
