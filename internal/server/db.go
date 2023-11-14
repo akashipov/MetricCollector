@@ -2,7 +2,6 @@ package server
 
 import (
 	"database/sql"
-	"fmt"
 	"net/http"
 
 	_ "github.com/lib/pq"
@@ -13,7 +12,7 @@ var DB *sql.DB
 func InitDB() {
 	var err error
 	DB, err = sql.Open("postgres", *PsqlInfo)
-	fmt.Println("Initted DB:", DB)
+	// fmt.Println("Initted DB:", DB)
 	if err != nil {
 		panic(err)
 	}
@@ -28,7 +27,7 @@ func InitDB() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Initted DB at the end of init method:", DB)
+	// fmt.Println("Initted DB at the end of init method:", DB)
 }
 
 func TestConnectionPostgres(w http.ResponseWriter, request *http.Request) {

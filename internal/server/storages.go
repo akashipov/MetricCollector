@@ -20,7 +20,6 @@ func (r *MemStorage) Get(metricName string, request *http.Request) *general.Metr
 		}
 		return nil
 	} else {
-		fmt.Println("Get db... ", DB)
 		row := DB.QueryRowContext(request.Context(), "SELECT * FROM metrics WHERE id = $1", metricName)
 		var metric general.Metrics
 		var v sql.NullFloat64
@@ -64,7 +63,6 @@ func (r *MemStorage) Record(
 			v.Float64 = 0.0
 			v.Valid = false
 		}
-		fmt.Println(value.ID, value.MType, v, delta, DB, request.Context())
 		query := "INSERT INTO metrics VALUES($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET mtype = $2, value = $3, delta = $4;"
 		if tx != nil {
 			_, err := tx.ExecContext(

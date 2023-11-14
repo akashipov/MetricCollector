@@ -191,6 +191,7 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 }
 
 func Updates(w http.ResponseWriter, request *http.Request) {
+	fmt.Println("Updates block is ran")
 	var buf bytes.Buffer
 	var metrics general.SeveralMetrics
 	_, err := buf.ReadFrom(request.Body)
@@ -255,10 +256,6 @@ func СheckContentType(w http.ResponseWriter, request *http.Request, pattern str
 }
 
 func MainPage(w http.ResponseWriter, request *http.Request) {
-	// err := СheckContentType(w, request, "text/plain")
-	// if err != nil {
-	// 	return
-	// }
 	ul := "<ul>"
 	for _, k := range MapMetric.MetricList {
 		if k.MType == agent.GAUGE {
@@ -379,10 +376,6 @@ func GetMetricShortForm(w http.ResponseWriter, request *http.Request) {
 }
 
 func GetMetric(w http.ResponseWriter, request *http.Request) {
-	// err := СheckContentType(w, request, "text/plain")
-	// if err != nil {
-	// 	return
-	// }
 	MetricName := chi.URLParam(request, "MetricName")
 	MetricType := chi.URLParam(request, "MetricType")
 	var answer string
