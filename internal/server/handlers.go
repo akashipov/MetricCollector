@@ -22,7 +22,7 @@ func ServerRouter(s *zap.SugaredLogger) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/ping", logger.WithLogging(http.HandlerFunc(TestConnection), s))
 	r.Get("/", logger.WithLogging(http.HandlerFunc(MainPage), s))
-	r.Post("/updates", logger.WithLogging(http.HandlerFunc(Updates), s))
+	r.Post("/updates/", logger.WithLogging(http.HandlerFunc(Updates), s))
 	r.Route(
 		"/update",
 		func(r chi.Router) {
@@ -115,7 +115,7 @@ func ProcessMetric(
 		MetricValue = *metric.Delta
 	default:
 		w.WriteHeader(http.StatusNotFound)
-		err := fmt.Errorf("Wrong type of metric: '%s'", MetricType)
+		err := fmt.Errorf("wrong type of metric: '%s'", MetricType)
 		w.Write([]byte(err.Error()))
 		return err
 	}
@@ -179,7 +179,7 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 			results.Mtrcs = append(results.Mtrcs, *val)
 		}
 	}
-	json_encoded, err := json.Marshal(results)
+	jsonEncoded, err := json.Marshal(results)
 	if err != nil {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusBadGateway)
@@ -187,7 +187,7 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(json_encoded)
+	w.Write(jsonEncoded)
 }
 
 func Updates(w http.ResponseWriter, request *http.Request) {

@@ -112,7 +112,7 @@ func (r *MetricSender) SendMetric(value interface{}, metricType string, metricNa
 }
 
 func (r *MetricSender) SendMetrics(metrics general.SeveralMetrics) error {
-	url := fmt.Sprintf("%s/updates", r.URL)
+	url := fmt.Sprintf("%s/updates/", r.URL)
 	fmt.Println("Sending post request with url: " + url)
 	s, err := json.Marshal(metrics)
 	if err != nil {
@@ -127,7 +127,7 @@ func (r *MetricSender) SendMetrics(metrics general.SeveralMetrics) error {
 		return err
 	}
 	if resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusCreated {
-		return fmt.Errorf("Something wrong with resp - '%v', status code - %v\n", resp, resp.StatusCode())
+		return fmt.Errorf("something wrong with resp - '%v', status code - %v", resp, resp.StatusCode())
 	}
 	fmt.Printf("Success: %v\n", resp.StatusCode())
 	return nil
