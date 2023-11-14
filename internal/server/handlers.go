@@ -178,7 +178,12 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 			results = append(results, *val)
 		}
 	}
-	jsonEncoded, err := json.Marshal(results)
+	var jsonEncoded []byte
+	if len(results) == 1 {
+		jsonEncoded, err = json.Marshal(results[0])
+	} else {
+		jsonEncoded, err = json.Marshal(results)
+	}
 	if err != nil {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusBadGateway)
