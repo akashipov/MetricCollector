@@ -138,6 +138,31 @@ func ProcessMetric(
 	return nil
 }
 
+func groupByMetrics(metrics []general.Metrics) []general.Metrics {
+	newMetrics := make(map[string]general.Metrics, 0)
+	fmt.Println("Metrics to group by:")
+	for _, v := range metrics {
+		g, ok := newMetrics[v.ID]
+		if ok && (g.MType == v.MType) {
+			switch g.MType {
+			case agent.GAUGE:
+				*(g.Value) = *v.Value
+			case agent.COUNTER:
+				*(g.Delta) += *v.Delta
+			}
+		} else {
+			newMetrics[v.ID] = v
+		}
+	}
+	fmt.Println("Metrics grouped by:")
+	a := make([]general.Metrics, 0)
+	for _, v := range newMetrics {
+		fmt.Println(v)
+		a = append(a, v)
+	}
+	return a
+}
+
 func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general.Metrics) {
 	results := make([]general.Metrics, 0)
 	var tx *sql.Tx
@@ -150,6 +175,7 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 			return
 		}
 	}
+	metrics = groupByMetrics(metrics)
 	for _, metric := range metrics {
 		err := ProcessMetric(w, request, &metric, tx)
 		if err != nil {
