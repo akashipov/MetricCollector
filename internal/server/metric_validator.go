@@ -54,7 +54,7 @@ func ValidateMetric(
 		w.WriteHeader(http.StatusBadRequest)
 		status, err = w.Write(
 			[]byte(
-				fmt.Sprintf("Wrong type of metric: '%s'", MetricType),
+				fmt.Sprintf("wrong type of metric: '%s'", MetricType),
 			),
 		)
 	}

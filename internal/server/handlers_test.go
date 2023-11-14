@@ -190,7 +190,7 @@ func TestUpdate(t *testing.T) {
 				contentType: "text/plain",
 			},
 			wantStatusCode: http.StatusBadRequest,
-			wantAnswer:     "Wrong type of metric: 'counter1'",
+			wantAnswer:     "wrong type of metric: 'counter1'",
 		},
 		{
 			name: "common_inconvertible_type",
@@ -335,7 +335,7 @@ func TestUpdateShortForm(t *testing.T) {
 				Body:        []byte("{\"id\":\"A\",\"type\":\"counter1\",\"delta\":10}"),
 			},
 			wantStatusCode: http.StatusNotFound,
-			wantAnswer:     "Wrong type of metric: 'counter1'",
+			wantAnswer:     "wrong type of metric: 'counter1'",
 		},
 		{
 			name: "common_inconvertible_type",

@@ -358,7 +358,7 @@ func GetMetricShortForm(w http.ResponseWriter, request *http.Request) {
 					answer = []byte(err.Error())
 				}
 			default:
-				answer = []byte("Wrong type of metric")
+				answer = []byte("wrong type of metric")
 			}
 		} else {
 			w.WriteHeader(http.StatusNotFound)

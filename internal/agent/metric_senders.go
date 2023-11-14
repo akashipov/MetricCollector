@@ -92,8 +92,7 @@ func (r *MetricSender) SendMetric(value interface{}, metricType string, metricNa
 	case GAUGE:
 		s = fmt.Sprintf("{\"id\":\"%s\",\"type\":\"%s\",\"value\":%f}", metricName, metricType, value)
 	default:
-		fmt.Printf("Wrong type of metric: %v\n", metricType)
-		return nil
+		return fmt.Errorf("wrong type of metric: %v\n", metricType)
 	}
 	req := r.Client.R().SetBody(s).SetHeader("Content-Type", "application/json")
 	resp, err := req.Post(
