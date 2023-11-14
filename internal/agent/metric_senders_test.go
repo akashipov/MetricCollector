@@ -18,13 +18,13 @@ func GetHandler(s *string, t *testing.T) func(w http.ResponseWriter, request *ht
 	return func(w http.ResponseWriter, request *http.Request) {
 		var buf bytes.Buffer
 		buf.ReadFrom(request.Body)
-		var m general.SeveralMetrics
+		var m []general.Metrics
 		err := json.Unmarshal(buf.Bytes(), &m)
 		if err != nil {
 			panic(err)
 		}
 		var v interface{}
-		for _, value := range m.Mtrcs {
+		for _, value := range m {
 			if value.Delta != nil {
 				v = *value.Delta
 			} else {

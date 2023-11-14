@@ -139,8 +139,7 @@ func ProcessMetric(
 }
 
 func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general.Metrics) {
-	results := general.SeveralMetrics{}
-	results.Mtrcs = make([]general.Metrics, 0)
+	results := make([]general.Metrics, 0)
 	var tx *sql.Tx
 	var err error
 	if !((PsqlInfo == nil) || (*PsqlInfo == "")) {
@@ -176,7 +175,7 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 	for _, metric := range metrics {
 		val := MapMetric.Get(metric.ID, request)
 		if val != nil {
-			results.Mtrcs = append(results.Mtrcs, *val)
+			results = append(results, *val)
 		}
 	}
 	jsonEncoded, err := json.Marshal(results)
@@ -193,7 +192,7 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 func Updates(w http.ResponseWriter, request *http.Request) {
 	fmt.Println("Updates block is ran")
 	var buf bytes.Buffer
-	var metrics general.SeveralMetrics
+	var metrics []general.Metrics
 	_, err := buf.ReadFrom(request.Body)
 	defer request.Body.Close()
 	if err != nil {
@@ -214,7 +213,7 @@ func Updates(w http.ResponseWriter, request *http.Request) {
 		w.Write([]byte(fmt.Sprintf("Unmarshal problem: %s", err.Error())))
 		return
 	}
-	SaveMetrics(w, request, metrics.Mtrcs)
+	SaveMetrics(w, request, metrics)
 }
 
 func UpdateShortForm(w http.ResponseWriter, request *http.Request) {

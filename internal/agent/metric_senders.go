@@ -92,7 +92,7 @@ func (r *MetricSender) SendMetric(value interface{}, metricType string, metricNa
 	case GAUGE:
 		s = fmt.Sprintf("{\"id\":\"%s\",\"type\":\"%s\",\"value\":%f}", metricName, metricType, value)
 	default:
-		return fmt.Errorf("wrong type of metric: %v\n", metricType)
+		return fmt.Errorf("wrong type of metric: %v", metricType)
 	}
 	req := r.Client.R().SetBody(s).SetHeader("Content-Type", "application/json")
 	resp, err := req.Post(
@@ -110,7 +110,7 @@ func (r *MetricSender) SendMetric(value interface{}, metricType string, metricNa
 	return nil
 }
 
-func (r *MetricSender) SendMetrics(metrics general.SeveralMetrics) error {
+func (r *MetricSender) SendMetrics(metrics []general.Metrics) error {
 	url := fmt.Sprintf("%s/updates/", r.URL)
 	fmt.Println("Sending post request with url: " + url)
 	s, err := json.Marshal(metrics)
@@ -137,26 +137,25 @@ func (r *MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int64) 
 	b, _ := json.Marshal(a)
 	var m map[string]interface{}
 	_ = json.Unmarshal(b, &m)
-	var metrics general.SeveralMetrics
-	metrics.Mtrcs = make([]general.Metrics, 0)
+	metrics := make([]general.Metrics, 0)
 	for _, v := range *r.ListMetrics {
 		casted, ok := m[v].(float64)
 		if ok {
-			metrics.Mtrcs = append(
-				metrics.Mtrcs,
+			metrics = append(
+				metrics,
 				general.Metrics{ID: v, MType: GAUGE, Value: &casted},
 			)
 		} else {
 			fmt.Println("Cannot be cast to float64, some wrong type")
 		}
 	}
-	metrics.Mtrcs = append(
-		metrics.Mtrcs,
+	metrics = append(
+		metrics,
 		general.Metrics{ID: "PollCount", MType: COUNTER, Delta: &countOfUpdate},
 	)
 	c := rand.Float64()
-	metrics.Mtrcs = append(
-		metrics.Mtrcs,
+	metrics = append(
+		metrics,
 		general.Metrics{ID: "RandomValue", MType: GAUGE, Value: &c},
 	)
 	err := r.SendMetrics(metrics)
