@@ -65,18 +65,26 @@ func (r *MemStorage) Record(
 		}
 		query := "INSERT INTO metrics VALUES($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET mtype = $2, value = $3, delta = $4;"
 		if tx != nil {
-			_, err := tx.ExecContext(
-				request.Context(),
-				query, value.ID, value.MType, v, delta,
-			)
+			f := func() error {
+				_, err := tx.ExecContext(
+					request.Context(),
+					query, value.ID, value.MType, v, delta,
+				)
+				return err
+			}
+			err := RetryCode(f)
 			if err != nil {
 				tx.Rollback()
 			}
 		} else {
-			_, err := DB.ExecContext(
-				request.Context(),
-				query, value.ID, value.MType, v, delta,
-			)
+			f := func() error {
+				_, err := DB.ExecContext(
+					request.Context(),
+					query, value.ID, value.MType, v, delta,
+				)
+				return err
+			}
+			err := RetryCode(f)
 			if err != nil {
 				fmt.Println(err.Error())
 			}

@@ -76,7 +76,10 @@ func Storage() {
 func run(srv *http.Server) {
 	server.ParseArgsServer()
 	if *server.PsqlInfo != "" {
-		server.InitDB()
+		err := server.InitDB()
+		if err != nil {
+			panic(err)
+		}
 	}
 	srv.Addr = *server.HPServer
 	fmt.Printf("Server is running on %s...\n", *server.HPServer)

@@ -168,7 +168,11 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 	var tx *sql.Tx
 	var err error
 	if !((PsqlInfo == nil) || (*PsqlInfo == "")) {
-		tx, err = DB.Begin()
+		f := func() error {
+			tx, err = DB.Begin()
+			return err
+		}
+		err = RetryCode(f)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(err.Error()))
@@ -191,7 +195,11 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 		}
 	}
 	if !((PsqlInfo == nil) || (*PsqlInfo == "")) {
-		err := tx.Commit()
+		f := func() error {
+			err := tx.Commit()
+			return err
+		}
+		err = RetryCode(f)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(err.Error()))
