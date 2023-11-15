@@ -504,7 +504,7 @@ func TestGetMetricShortForm(t *testing.T) {
 			wantAnswer:     []string{"{\"id\":\"B\",\"type\":\"gauge\",\"value\":17}"},
 		},
 		{
-			name: "common_gauge_wrong_type",
+			name: "common_gauge_wrong_type_there_is_no",
 			args: args{
 				Method:        http.MethodPost,
 				URL:           server.URL + "/value",
@@ -516,7 +516,7 @@ func TestGetMetricShortForm(t *testing.T) {
 			wantAnswer:     []string{"There is no metric like this: 'C'"},
 		},
 		{
-			name: "common_gauge_wrong_type",
+			name: "common_gauge_wrong_type_other_metric_type",
 			args: args{
 				Method:        http.MethodPost,
 				URL:           server.URL + "/value",
@@ -655,7 +655,7 @@ func TestGetMetricFull(t *testing.T) {
 			wantAnswer:     []string{"17"},
 		},
 		{
-			name: "common_gauge_wrong_type",
+			name: "common_gauge_wrong_type_there_is_no",
 			args: args{
 				Method:        http.MethodGet,
 				URL:           server.URL + "/value/counter/C",
@@ -663,10 +663,10 @@ func TestGetMetricFull(t *testing.T) {
 				IsEncodedResp: false,
 			},
 			wantStatusCode: http.StatusNotFound,
-			wantAnswer:     []string{"There is no metric like this: C"},
+			wantAnswer:     []string{"There is no metric like this: 'C'"},
 		},
 		{
-			name: "common_gauge_wrong_type",
+			name: "common_gauge_wrong_type_other_metric_type",
 			args: args{
 				Method:      http.MethodGet,
 				URL:         server.URL + "/value/counter/B",

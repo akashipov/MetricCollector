@@ -19,6 +19,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var WritingErrorFormatResp string = "Writing problem '%v': '%v'"
+
 func ServerRouter(s *zap.SugaredLogger) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/ping", logger.WithLogging(http.HandlerFunc(TestConnection), s))
@@ -103,8 +105,12 @@ func ProcessMetric(
 ) error {
 	if metric == nil {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Was passed wrong nil value like metric"))
-		return nil
+		err := errors.New("Was passed wrong nil value like metric")
+		status, wErr := w.Write([]byte(err.Error()))
+		if wErr != nil {
+			return fmt.Errorf(WritingErrorFormatResp, status, errors.Join(err, wErr))
+		}
+		return err
 	}
 	MetricType := metric.MType
 	MetricName := metric.ID
@@ -117,13 +123,16 @@ func ProcessMetric(
 	default:
 		w.WriteHeader(http.StatusNotFound)
 		err := fmt.Errorf("wrong type of metric: '%s'", MetricType)
-		w.Write([]byte(err.Error()))
+		status, wErr := w.Write([]byte(err.Error()))
+		if wErr != nil {
+			return fmt.Errorf(WritingErrorFormatResp, status, wErr)
+		}
 		return err
 	}
 	m, err := ValidateMetric(w, MetricType, MetricValue, MetricName)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(err.Error()))
+		_, err = w.Write([]byte(err.Error()))
 		return err
 	}
 	if m == nil {
@@ -133,8 +142,8 @@ func ProcessMetric(
 	err = SaveMetric(w, m, request, tx)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(err.Error()))
-		return err
+		_, wErr := w.Write([]byte(err.Error()))
+		return errors.Join(err, wErr)
 	}
 	return nil
 }
@@ -176,7 +185,10 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 		err = general.RetryCode(f, syscall.ECONNREFUSED)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(err.Error()))
+			_, wErr := w.Write([]byte(err.Error()))
+			if wErr != nil {
+				fmt.Println(errors.Join(err, wErr).Error())
+			}
 			return
 		}
 	}
@@ -188,7 +200,10 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 				err = tx.Rollback()
 				if err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte(err.Error()))
+					_, wErr := w.Write([]byte(err.Error()))
+					if wErr != nil {
+						fmt.Println(errors.Join(err, wErr).Error())
+					}
 					return
 				}
 			}
@@ -203,7 +218,10 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 		err = general.RetryCode(f, syscall.ECONNREFUSED)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(err.Error()))
+			_, wErr := w.Write([]byte(err.Error()))
+			if wErr != nil {
+				fmt.Println(errors.Join(err, wErr).Error())
+			}
 			return
 		}
 	}
@@ -222,11 +240,15 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 	if err != nil {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusBadGateway)
-		w.Write([]byte(err.Error()))
+		_, wErr := w.Write([]byte(err.Error()))
+		if wErr != nil {
+			fmt.Println(errors.Join(err, wErr).Error())
+		}
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonEncoded)
+	status, err := w.Write(jsonEncoded)
+	fmt.Printf(WritingErrorFormatResp, status, err)
 }
 
 func Updates(w http.ResponseWriter, request *http.Request) {
@@ -237,20 +259,29 @@ func Updates(w http.ResponseWriter, request *http.Request) {
 	defer request.Body.Close()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(err.Error()))
+		status, wErr := w.Write([]byte(err.Error()))
+		if wErr != nil {
+			fmt.Printf(WritingErrorFormatResp, status, errors.Join(err, wErr))
+		}
 		return
 	}
 	data := buf.Bytes()
 	data, err = Decode(w, request, data)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(err.Error()))
+		status, wErr := w.Write([]byte(err.Error()))
+		if wErr != nil {
+			fmt.Printf(WritingErrorFormatResp, status, errors.Join(err, wErr))
+		}
 		return
 	}
 	err = json.Unmarshal(data, &metrics)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(fmt.Sprintf("Unmarshal problem: %s", err.Error())))
+		status, wErr := w.Write([]byte(fmt.Sprintf("Unmarshal problem: %s\n", err.Error())))
+		if wErr != nil {
+			fmt.Printf(WritingErrorFormatResp, status, errors.Join(err, wErr))
+		}
 		return
 	}
 	SaveMetrics(w, request, metrics)
@@ -263,20 +294,29 @@ func UpdateShortForm(w http.ResponseWriter, request *http.Request) {
 	defer request.Body.Close()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(err.Error()))
+		status, wErr := w.Write([]byte(err.Error()))
+		if wErr != nil {
+			fmt.Printf(WritingErrorFormatResp, status, errors.Join(err, wErr))
+		}
 		return
 	}
 	data := buf.Bytes()
 	data, err = Decode(w, request, data)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(err.Error()))
+		status, wErr := w.Write([]byte(err.Error()))
+		if wErr != nil {
+			fmt.Printf(WritingErrorFormatResp, status, errors.Join(err, wErr))
+		}
 		return
 	}
 	err = json.Unmarshal(data, &metric)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(fmt.Sprintf("Unmarshal problem: %s", err.Error())))
+		status, wErr := w.Write([]byte(fmt.Sprintf("Unmarshal problem: %s\n", err.Error())))
+		if wErr != nil {
+			fmt.Printf(WritingErrorFormatResp, status, errors.Join(err, wErr))
+		}
 		return
 	}
 	SaveMetrics(w, request, []general.Metrics{metric})
@@ -287,9 +327,13 @@ func СheckContentType(w http.ResponseWriter, request *http.Request, pattern str
 	fmt.Printf("Content-type has been got: '%s'\n", contentType)
 	if !strings.Contains(contentType, pattern) {
 		w.WriteHeader(http.StatusBadRequest)
-		msg := "bad type of content-type, please change it"
-		w.Write([]byte(msg))
-		return errors.New(msg)
+		msg := "bad type of content-type, please change it\n"
+		status, wErr := w.Write([]byte(msg))
+		err := errors.New(msg)
+		if wErr != nil {
+			return fmt.Errorf(WritingErrorFormatResp, status, errors.Join(err, wErr))
+		}
+		return err
 	}
 	return nil
 }
@@ -309,7 +353,7 @@ func MainPage(w http.ResponseWriter, request *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	status, err := w.Write([]byte(html))
 	if err != nil {
-		fmt.Printf("%v: %v", status, err.Error())
+		fmt.Printf(WritingErrorFormatResp, status, err.Error())
 	}
 }
 
@@ -397,20 +441,20 @@ func GetMetricShortForm(w http.ResponseWriter, request *http.Request) {
 					answer = []byte(err.Error())
 				}
 			default:
-				answer = []byte("wrong type of metric")
+				answer = []byte("wrong type of metric\n")
 			}
 		} else {
 			w.WriteHeader(http.StatusNotFound)
-			answer = []byte(fmt.Sprintf("It has other metric type: '%s'", val.MType))
+			answer = []byte(fmt.Sprintf("It has other metric type: '%s'\n", val.MType))
 		}
 	} else {
 		w.WriteHeader(http.StatusNotFound)
-		answer = []byte(fmt.Sprintf("There is no metric like this: '%v'", MetricName))
+		answer = []byte(fmt.Sprintf("There is no metric like this: '%v'\n", MetricName))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	status, err := w.Write(answer)
 	if err != nil {
-		fmt.Printf("%v: %v", status, err.Error())
+		fmt.Printf(WritingErrorFormatResp, status, err.Error())
 	}
 }
 
@@ -429,14 +473,14 @@ func GetMetric(w http.ResponseWriter, request *http.Request) {
 			}
 		} else {
 			w.WriteHeader(http.StatusNotFound)
-			answer = fmt.Sprintf("It has other metric type: '%s'", val.MType)
+			answer = fmt.Sprintf("It has other metric type: '%s'\n", val.MType)
 		}
 	} else {
 		w.WriteHeader(http.StatusNotFound)
-		answer = fmt.Sprintf("There is no metric like this: %v", MetricName)
+		answer = fmt.Sprintf("There is no metric like this: '%v'\n", MetricName)
 	}
 	status, err := w.Write([]byte(answer))
 	if err != nil {
-		fmt.Printf("%v: %v", status, err.Error())
+		fmt.Printf(WritingErrorFormatResp, status, err.Error())
 	}
 }
