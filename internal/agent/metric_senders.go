@@ -2,10 +2,12 @@ package agent
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/akashipov/MetricCollector/internal/general"
@@ -84,7 +86,6 @@ func (r *MetricSender) PollInterval(isTestMode bool) {
 
 func (r *MetricSender) SendMetric(value interface{}, metricType string, metricName string) error {
 	url := fmt.Sprintf("%s/update/", r.URL)
-	fmt.Println("Sending post request with url: " + url)
 	var s string
 	switch metricType {
 	case COUNTER:
@@ -95,9 +96,15 @@ func (r *MetricSender) SendMetric(value interface{}, metricType string, metricNa
 		return fmt.Errorf("wrong type of metric: %v", metricType)
 	}
 	req := r.Client.R().SetBody(s).SetHeader("Content-Type", "application/json")
-	resp, err := req.Post(
-		url,
-	)
+	var err error
+	var resp *resty.Response
+	f := func() error {
+		resp, err = req.Post(
+			url,
+		)
+		return err
+	}
+	err = general.RetryCode(f, syscall.ECONNREFUSED)
 	if err != nil {
 		fmt.Printf("Request cannot be precossed, something is wrong: %s\n", err.Error())
 		return err
@@ -113,16 +120,22 @@ func (r *MetricSender) SendMetric(value interface{}, metricType string, metricNa
 func (r *MetricSender) SendMetrics(metrics []general.Metrics) error {
 	url := fmt.Sprintf("%s/updates/", r.URL)
 	fmt.Println("Sending post request with url: " + url)
+	var err error
 	s, err := json.Marshal(metrics)
 	if err != nil {
 		return err
 	}
 	req := r.Client.R().SetBody(s).SetHeader("Content-Type", "application/json")
-	resp, err := req.Post(
-		url,
-	)
+	var resp *resty.Response
+	f := func() error {
+		resp, err = req.Post(
+			url,
+		)
+		return err
+	}
+	err = general.RetryCode(f, syscall.ECONNREFUSED)
 	if err != nil {
-		fmt.Printf("Request cannot be precossed, something is wrong: %s\n", err.Error())
+		err = fmt.Errorf("request cannot be precossed, something is wrong: %w", err)
 		return err
 	}
 	if resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusCreated {
@@ -138,6 +151,7 @@ func (r *MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int64) 
 	var m map[string]interface{}
 	_ = json.Unmarshal(b, &m)
 	metrics := make([]general.Metrics, 0)
+	var err error
 	for _, v := range *r.ListMetrics {
 		casted, ok := m[v].(float64)
 		if ok {
@@ -146,8 +160,12 @@ func (r *MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int64) 
 				general.Metrics{ID: v, MType: GAUGE, Value: &casted},
 			)
 		} else {
-			fmt.Println("Cannot be cast to float64, some wrong type")
+			err = errors.Join(err, fmt.Errorf("cannot be cast to float64, wrong type for %s metric name\n", v))
 		}
+	}
+	if err != nil {
+		fmt.Println(err.Error())
+		return
 	}
 	metrics = append(
 		metrics,
@@ -158,7 +176,7 @@ func (r *MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int64) 
 		metrics,
 		general.Metrics{ID: "RandomValue", MType: GAUGE, Value: &c},
 	)
-	err := r.SendMetrics(metrics)
+	err = r.SendMetrics(metrics)
 	if err != nil {
 		fmt.Println(err.Error())
 		return

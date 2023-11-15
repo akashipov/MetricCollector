@@ -2,37 +2,15 @@ package server
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"net/http"
 	"syscall"
-	"time"
 
+	"github.com/akashipov/MetricCollector/internal/general"
 	_ "github.com/lib/pq"
 )
 
 var DB *sql.DB
-
-func RetryCode(f func() error) error {
-	sleepTime := time.Second
-	countOfRepetition := 3
-	for i := 0; i >= 0; i++ {
-		err := f()
-		if err != nil {
-			isPsqlError := errors.Is(err, syscall.ECONNREFUSED)
-			fmt.Println("isPsqlError:", isPsqlError)
-			if isPsqlError && i < countOfRepetition {
-				time.Sleep(sleepTime)
-				fmt.Println("Repeating... SleepTime:", sleepTime)
-				sleepTime += 2 * time.Second
-				continue
-			}
-			return err
-		}
-		return nil
-	}
-	return nil
-}
 
 func InitDB() error {
 	var err error
@@ -51,7 +29,7 @@ func InitDB() error {
 		)
 		return err
 	}
-	err = RetryCode(f)
+	err = general.RetryCode(f, syscall.ECONNREFUSED)
 	if err != nil {
 		return err
 	}
@@ -60,7 +38,10 @@ func InitDB() error {
 }
 
 func TestConnectionPostgres(w http.ResponseWriter, request *http.Request) {
-	err := DB.Ping()
+	f := func() error {
+		return DB.Ping()
+	}
+	err := general.RetryCode(f, syscall.ECONNREFUSED)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

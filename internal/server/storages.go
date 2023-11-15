@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"syscall"
 
 	"github.com/akashipov/MetricCollector/internal/general"
 )
@@ -72,7 +73,7 @@ func (r *MemStorage) Record(
 				)
 				return err
 			}
-			err := RetryCode(f)
+			err := general.RetryCode(f, syscall.ECONNREFUSED)
 			if err != nil {
 				tx.Rollback()
 			}
@@ -84,7 +85,7 @@ func (r *MemStorage) Record(
 				)
 				return err
 			}
-			err := RetryCode(f)
+			err := general.RetryCode(f, syscall.ECONNREFUSED)
 			if err != nil {
 				fmt.Println(err.Error())
 			}

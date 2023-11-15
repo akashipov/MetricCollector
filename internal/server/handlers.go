@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"syscall"
 
 	"github.com/akashipov/MetricCollector/internal/agent"
 	"github.com/akashipov/MetricCollector/internal/general"
@@ -172,7 +173,7 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 			tx, err = DB.Begin()
 			return err
 		}
-		err = RetryCode(f)
+		err = general.RetryCode(f, syscall.ECONNREFUSED)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(err.Error()))
@@ -199,7 +200,7 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 			err := tx.Commit()
 			return err
 		}
-		err = RetryCode(f)
+		err = general.RetryCode(f, syscall.ECONNREFUSED)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(err.Error()))
