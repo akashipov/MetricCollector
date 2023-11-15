@@ -160,7 +160,7 @@ func (r *MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int64) 
 				general.Metrics{ID: v, MType: GAUGE, Value: &casted},
 			)
 		} else {
-			err = errors.Join(err, fmt.Errorf("cannot be cast to float64, wrong type for %s metric name\n", v))
+			err = errors.Join(err, fmt.Errorf("cannot be cast to float64, wrong type for %s metric name", v))
 		}
 	}
 	if err != nil {
