@@ -105,7 +105,7 @@ func ProcessMetric(
 ) error {
 	if metric == nil {
 		w.WriteHeader(http.StatusBadRequest)
-		err := errors.New("Was passed wrong nil value like metric")
+		err := errors.New("was passed wrong nil value like metric")
 		status, wErr := w.Write([]byte(err.Error()))
 		if wErr != nil {
 			return fmt.Errorf(WritingErrorFormatResp, status, errors.Join(err, wErr))
@@ -327,7 +327,7 @@ func СheckContentType(w http.ResponseWriter, request *http.Request, pattern str
 	fmt.Printf("Content-type has been got: '%s'\n", contentType)
 	if !strings.Contains(contentType, pattern) {
 		w.WriteHeader(http.StatusBadRequest)
-		msg := "bad type of content-type, please change it\n"
+		msg := "bad type of content-type, please change it"
 		status, wErr := w.Write([]byte(msg))
 		err := errors.New(msg)
 		if wErr != nil {
