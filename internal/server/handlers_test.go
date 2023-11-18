@@ -639,6 +639,9 @@ func TestGetMetricFull(t *testing.T) {
 	server := httptest.NewServer(ServerRouter(&s))
 	a := int64(10)
 	ms, err := MapMetric.GetAll()
+	if err != nil {
+		panic(err)
+	}
 	ms["A"] = &general.Metrics{ID: "A", MType: agent.COUNTER, Delta: &a}
 	b := float64(17)
 	ms["B"] = &general.Metrics{ID: "B", MType: agent.GAUGE, Value: &b}
