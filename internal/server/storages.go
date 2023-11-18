@@ -55,13 +55,12 @@ func (r *PsqlStorage) GetAll() map[string]*general.Metrics {
 		return nil
 	}
 	rows, err := DB.QueryContext(context.Background(), "SELECT * FROM metrics")
-	defer rows.Close()
 	if err != nil {
 		fmt.Println(err.Error())
 		return nil
 	}
-	var metrics map[string]*general.Metrics
-	metrics = make(map[string]*general.Metrics)
+	defer rows.Close()
+	metrics := make(map[string]*general.Metrics)
 	var rErr error
 	for rows.Next() {
 		var metric general.Metrics
@@ -90,7 +89,7 @@ func (r *PsqlStorage) GetAll() map[string]*general.Metrics {
 
 func (r *PsqlStorage) Clean() error {
 	if (r.PsqlInfo == nil) || (*r.PsqlInfo == "") {
-		return fmt.Errorf("Wrong settings for class PsqlInfo: '%s'\n", *r.PsqlInfo)
+		return fmt.Errorf("wrong settings for class PsqlInfo: '%s'", *r.PsqlInfo)
 	}
 	_, err := DB.ExecContext(context.Background(), "TRUNCATE TABLE metrics")
 	if err != nil {

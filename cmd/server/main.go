@@ -70,13 +70,19 @@ func Storage() {
 			fmt.Println("Create block: " + err.Error())
 			return
 		}
-		b, err := json.Marshal(*server.MapMetric)
-		if err != nil {
-			fmt.Println("Marshal block: " + err.Error())
-			return
+		v, ok := server.MapMetric.(*server.MemStorage)
+		if ok {
+			b, err := json.Marshal(v)
+			if err != nil {
+				fmt.Println("Marshal block: " + err.Error())
+				return
+			}
+			f.Write(b)
+			fmt.Println("Metrics are saved!")
+		} else {
+			err := fmt.Errorf("passed wrong type of storage")
+			panic(err)
 		}
-		f.Write(b)
-		fmt.Println("Metrics are saved!")
 	}
 }
 
