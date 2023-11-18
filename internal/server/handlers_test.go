@@ -141,13 +141,17 @@ func TestSaveMetric(t *testing.T) {
 			}
 			header := customWriter.Header()
 			assert.EqualValues(t, tt.wantStatusCode, header["Status-Code"])
-			assert.Equal(t, len(MapMetric.GetAll()), len(tt.wantMap))
+			ms, err := MapMetric.GetAll()
+			if err != nil {
+				panic(err)
+			}
+			assert.Equal(t, len(ms), len(tt.wantMap))
 			for _, v := range tt.wantMap {
-				actualValue := MapMetric.GetAll()[v.ID]
+				actualValue := ms[v.ID]
 				assert.Equal(t, v.Delta, actualValue.Delta)
 				assert.Equal(t, v.Value, actualValue.Value)
 			}
-			err := MapMetric.Clean()
+			err = MapMetric.Clean()
 			if err != nil {
 				panic(err)
 			}
@@ -464,9 +468,13 @@ func TestGetMetricShortForm(t *testing.T) {
 
 	// MapMetric.MetricList = make(map[string]*general.Metrics, 0)
 	a := int64(10)
-	MapMetric.GetAll()["A"] = &general.Metrics{ID: "A", MType: agent.COUNTER, Delta: &a}
+	ms, err := MapMetric.GetAll()
+	if err != nil {
+		panic(err)
+	}
+	ms["A"] = &general.Metrics{ID: "A", MType: agent.COUNTER, Delta: &a}
 	b := float64(17)
-	MapMetric.GetAll()["B"] = &general.Metrics{ID: "B", MType: agent.GAUGE, Value: &b}
+	ms["B"] = &general.Metrics{ID: "B", MType: agent.GAUGE, Value: &b}
 	defer server.Close()
 	tests := []struct {
 		name           string
@@ -630,9 +638,10 @@ func TestGetMetricFull(t *testing.T) {
 	s := *logger.Sugar()
 	server := httptest.NewServer(ServerRouter(&s))
 	a := int64(10)
-	MapMetric.GetAll()["A"] = &general.Metrics{ID: "A", MType: agent.COUNTER, Delta: &a}
+	ms, err := MapMetric.GetAll()
+	ms["A"] = &general.Metrics{ID: "A", MType: agent.COUNTER, Delta: &a}
 	b := float64(17)
-	MapMetric.GetAll()["B"] = &general.Metrics{ID: "B", MType: agent.GAUGE, Value: &b}
+	ms["B"] = &general.Metrics{ID: "B", MType: agent.GAUGE, Value: &b}
 	defer server.Close()
 	tests := []struct {
 		name           string

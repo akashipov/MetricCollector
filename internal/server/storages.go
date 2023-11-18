@@ -13,7 +13,7 @@ import (
 
 type Storage interface {
 	Get(metricName string, request *http.Request) *general.Metrics
-	GetAll() map[string]*general.Metrics
+	GetAll() (map[string]*general.Metrics, error)
 	Record(
 		value *general.Metrics, request *http.Request,
 		tx *sql.Tx,
@@ -49,15 +49,14 @@ func (r *PsqlStorage) Get(metricName string, request *http.Request) *general.Met
 	return &metric
 }
 
-func (r *PsqlStorage) GetAll() map[string]*general.Metrics {
+func (r *PsqlStorage) GetAll() (map[string]*general.Metrics, error) {
 	if (r.PsqlInfo == nil) || (*r.PsqlInfo == "") {
-		fmt.Printf("Wrong settings for class PsqlInfo: '%s'\n", *r.PsqlInfo)
-		return nil
+		err := fmt.Errorf("wrong settings for class PsqlInfo: '%s'", *r.PsqlInfo)
+		return nil, err
 	}
 	rows, err := DB.QueryContext(context.Background(), "SELECT * FROM metrics")
 	if err != nil {
-		fmt.Println(err.Error())
-		return nil
+		return nil, err
 	}
 	defer rows.Close()
 	metrics := make(map[string]*general.Metrics)
@@ -81,10 +80,13 @@ func (r *PsqlStorage) GetAll() map[string]*general.Metrics {
 		metrics[metric.ID] = &metric
 	}
 	if rErr != nil {
-		fmt.Println(rErr.Error())
-		return nil
+		return nil, rErr
 	}
-	return metrics
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+	return metrics, nil
 }
 
 func (r *PsqlStorage) Clean() error {
@@ -162,8 +164,8 @@ func (r *MemStorage) Get(metricName string, request *http.Request) *general.Metr
 	return nil
 }
 
-func (r *MemStorage) GetAll() map[string]*general.Metrics {
-	return r.MetricList
+func (r *MemStorage) GetAll() (map[string]*general.Metrics, error) {
+	return r.MetricList, nil
 }
 
 func (r *MemStorage) Clean() error {

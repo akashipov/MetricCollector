@@ -340,7 +340,13 @@ func СheckContentType(w http.ResponseWriter, request *http.Request, pattern str
 
 func MainPage(w http.ResponseWriter, request *http.Request) {
 	ul := "<ul>"
-	for _, k := range MapMetric.GetAll() {
+	metrics, err := MapMetric.GetAll()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	for _, k := range metrics {
 		if k.MType == agent.GAUGE {
 			ul += fmt.Sprintf("<li>%v: %v</li>", k.ID, *k.Value)
 		}
