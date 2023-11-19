@@ -79,6 +79,7 @@ func TestSaveMetric(t *testing.T) {
 		Value: &f,
 	}
 	var customWriter http.ResponseWriter = &CustomResponseWriter{}
+	InitDB()
 	tests := []struct {
 		name            string
 		args            args
@@ -141,7 +142,7 @@ func TestSaveMetric(t *testing.T) {
 			}
 			header := customWriter.Header()
 			assert.EqualValues(t, tt.wantStatusCode, header["Status-Code"])
-			ms, err := MapMetric.GetAll()
+			ms, err := OurStorage.GetAll()
 			if err != nil {
 				panic(err)
 			}
@@ -151,7 +152,7 @@ func TestSaveMetric(t *testing.T) {
 				assert.Equal(t, v.Delta, actualValue.Delta)
 				assert.Equal(t, v.Value, actualValue.Value)
 			}
-			err = MapMetric.Clean()
+			err = OurStorage.Clean()
 			if err != nil {
 				panic(err)
 			}
@@ -253,7 +254,7 @@ func TestUpdate(t *testing.T) {
 				resp.String(),
 				tt.wantAnswer,
 			)
-			err = MapMetric.Clean()
+			err = OurStorage.Clean()
 			if err != nil {
 				panic(err)
 			}
@@ -441,7 +442,7 @@ func TestUpdateShortForm(t *testing.T) {
 				resp.String(),
 				tt.wantAnswer,
 			)
-			err = MapMetric.Clean()
+			err = OurStorage.Clean()
 			if err != nil {
 				panic(err)
 			}
@@ -466,9 +467,9 @@ func TestGetMetricShortForm(t *testing.T) {
 	s := *logger.Sugar()
 	server := httptest.NewServer(ServerRouter(&s))
 
-	// MapMetric.MetricList = make(map[string]*general.Metrics, 0)
+	// OurStorage.MetricList = make(map[string]*general.Metrics, 0)
 	a := int64(10)
-	ms, err := MapMetric.GetAll()
+	ms, err := OurStorage.GetAll()
 	if err != nil {
 		panic(err)
 	}
@@ -638,7 +639,7 @@ func TestGetMetricFull(t *testing.T) {
 	s := *logger.Sugar()
 	server := httptest.NewServer(ServerRouter(&s))
 	a := int64(10)
-	ms, err := MapMetric.GetAll()
+	ms, err := OurStorage.GetAll()
 	if err != nil {
 		panic(err)
 	}

@@ -19,7 +19,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var WritingErrorFormatResp string = "Writing problem '%v': '%v'"
+var WritingErrorFormatResp string = "Writing problem '%v': '%v'\n"
 
 func ServerRouter(s *zap.SugaredLogger) http.Handler {
 	r := chi.NewRouter()
@@ -72,7 +72,7 @@ func SaveMetric(
 	w http.ResponseWriter, metric *general.Metrics, request *http.Request,
 	tx *sql.Tx,
 ) error {
-	val := MapMetric.Get(metric.ID, request)
+	val := OurStorage.Get(metric.ID, request)
 	if val != nil {
 		switch metric.MType {
 		case agent.COUNTER:
@@ -93,7 +93,7 @@ func SaveMetric(
 	}
 	fmt.Println("Have got")
 	fmt.Println(val.ID, val.MType)
-	MapMetric.Record(val, request, tx)
+	OurStorage.Record(val, request, tx)
 	metric.Delta = val.Delta
 	metric.Value = val.Value
 	return nil
@@ -226,7 +226,7 @@ func SaveMetrics(w http.ResponseWriter, request *http.Request, metrics []general
 		}
 	}
 	for _, metric := range metrics {
-		val := MapMetric.Get(metric.ID, request)
+		val := OurStorage.Get(metric.ID, request)
 		if val != nil {
 			results = append(results, *val)
 		}
@@ -340,7 +340,7 @@ func СheckContentType(w http.ResponseWriter, request *http.Request, pattern str
 
 func MainPage(w http.ResponseWriter, request *http.Request) {
 	ul := "<ul>"
-	metrics, err := MapMetric.GetAll()
+	metrics, err := OurStorage.GetAll()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
@@ -430,7 +430,7 @@ func GetMetricShortForm(w http.ResponseWriter, request *http.Request) {
 	MetricName := metric.ID
 	MetricType := metric.MType
 	var answer []byte
-	val := MapMetric.Get(MetricName, request)
+	val := OurStorage.Get(MetricName, request)
 	if ok := val != nil; ok {
 		if val.MType == MetricType {
 			switch MetricType {
@@ -468,7 +468,7 @@ func GetMetric(w http.ResponseWriter, request *http.Request) {
 	MetricName := chi.URLParam(request, "MetricName")
 	MetricType := chi.URLParam(request, "MetricType")
 	var answer string
-	val := MapMetric.Get(MetricName, request)
+	val := OurStorage.Get(MetricName, request)
 	if ok := val != nil; ok {
 		if val.MType == MetricType {
 			w.Header().Set("Content-Type", "text/html")

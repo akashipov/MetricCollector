@@ -135,6 +135,7 @@ func (r *PsqlStorage) Record(
 		}
 		err := general.RetryCode(f, syscall.ECONNREFUSED)
 		if err != nil {
+			fmt.Println(err.Error())
 			tx.Rollback()
 		}
 	} else {
@@ -204,5 +205,3 @@ func NewStorage(vMap map[string]*general.Metrics) Storage {
 		return &PsqlStorage{PsqlInfo: PsqlInfo}
 	}
 }
-
-var MapMetric = NewStorage(nil)
