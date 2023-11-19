@@ -88,11 +88,9 @@ func Storage() {
 
 func run(srv *http.Server) {
 	server.ParseArgsServer()
-	if *server.PsqlInfo != "" {
-		err := server.InitDB()
-		if err != nil {
-			panic(err)
-		}
+	err := server.InitDB()
+	if err != nil {
+		panic(err)
 	}
 	srv.Addr = *server.HPServer
 	fmt.Printf("Server is running on %s...\n", *server.HPServer)
@@ -117,7 +115,7 @@ func run(srv *http.Server) {
 		}
 		go Storage()
 	}
-	err := srv.ListenAndServe()
+	err = srv.ListenAndServe()
 	if err != http.ErrServerClosed {
 		log.Fatalf("HTTP server ListenAndServe: %v", err)
 	}

@@ -65,6 +65,7 @@ func Update(w http.ResponseWriter, request *http.Request) {
 	if m == nil {
 		return
 	}
+	fmt.Println("12431231243", m)
 	SaveMetric(w, m, request, nil)
 }
 
