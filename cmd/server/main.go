@@ -70,7 +70,7 @@ func Storage() {
 			fmt.Println("Create block: " + err.Error())
 			return
 		}
-		v, ok := server.MapMetric.(*server.MemStorage)
+		v, ok := server.OurStorage.(*server.MemStorage)
 		if ok {
 			b, err := json.Marshal(v)
 			if err != nil {
@@ -107,7 +107,7 @@ func run(srv *http.Server) {
 		if *server.StartLoadMetric {
 			b, err := os.ReadFile(*server.FSPath)
 			if err == nil {
-				err = json.Unmarshal(b, server.MapMetric)
+				err = json.Unmarshal(b, server.OurStorage)
 				if err != nil {
 					fmt.Println("Reading unmarshal block:", err.Error())
 				} else {
