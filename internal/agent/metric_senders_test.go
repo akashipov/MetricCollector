@@ -33,6 +33,10 @@ func GetHandler(s *string, t *testing.T) func(w http.ResponseWriter, request *ht
 			(*s) += fmt.Sprintf("id: '%v', type: '%v', value: '%v'||", value.ID, value.MType, v)
 		}
 		assert.Equal(t, "application/json", request.Header["Content-Type"][0])
+		hash := request.Header.Get("HashSHA256")
+		if hash != "" {
+			(*s) += fmt.Sprintf("Hashed")
+		}
 	}
 }
 
@@ -42,18 +46,31 @@ func TestMetricSender_PollInterval(t *testing.T) {
 	}
 	ParseArgsClient()
 	tests := []struct {
-		name   string
-		fields fields
+		name          string
+		fields        fields
+		keyForHashing string
+		isHashed      bool
 	}{
 		{
 			name: "1",
 			fields: fields{
 				ListMetrics: &ListMetrics,
 			},
+			keyForHashing: "",
+			isHashed:      false,
+		},
+		{
+			name: "1",
+			fields: fields{
+				ListMetrics: &ListMetrics,
+			},
+			keyForHashing: "blabla",
+			isHashed:      true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			AgentKey = &tt.keyForHashing
 			s := ""
 			fmt.Println("Mocking server...")
 			server := httptest.NewServer(
@@ -77,6 +94,9 @@ func TestMetricSender_PollInterval(t *testing.T) {
 			}
 			assert.Contains(t, s, "id: 'RandomValue', type: 'gauge', value:")
 			assert.Contains(t, s, "id: 'PollCount', type: 'counter', value: '1'")
+			if tt.isHashed {
+				assert.Equal(t, s[len(s)-len("||Hashed"):], "||Hashed")
+			}
 		})
 	}
 }
