@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/akashipov/MetricCollector/internal/general"
 	"github.com/akashipov/MetricCollector/internal/server"
 	"go.uber.org/zap"
 )
@@ -58,38 +59,63 @@ func Storage() {
 	defer tickerStorageInterval.Stop()
 	for {
 		<-tickerStorageInterval.C
-		f, err := os.Create(*server.FSPath)
+		var f *os.File
+		var err error
+		fun := func() error {
+			f, err = os.Create(*server.FSPath)
+			return err
+		}
+		err = general.RetryCode(fun, syscall.EACCES)
 		if err != nil {
-			fmt.Println(err.Error())
+			fmt.Println("Create block: " + err.Error())
 			return
 		}
-		b, err := json.Marshal(*server.MapMetric)
-		if err != nil {
-			fmt.Println(err.Error())
-			return
+		v, ok := server.OurStorage.(*server.MemStorage)
+		if ok {
+			b, err := json.Marshal(v)
+			if err != nil {
+				fmt.Println("Marshal block: " + err.Error())
+				return
+			}
+			f.Write(b)
+			fmt.Println("Metrics are saved!")
+		} else {
+			err := fmt.Errorf("passed wrong type of storage")
+			panic(err)
 		}
-		f.Write(b)
-		fmt.Println("Metrics are saved!")
 	}
 }
 
 func run(srv *http.Server) {
 	server.ParseArgsServer()
+	err := server.InitDB()
+	if err != nil {
+		panic(err)
+	}
 	srv.Addr = *server.HPServer
 	fmt.Printf("Server is running on %s...\n", *server.HPServer)
-	go Storage()
-	if *server.StartLoadMetric {
-		b, err := os.ReadFile(*server.FSPath)
-		if err == nil {
-			err = json.Unmarshal(b, server.MapMetric)
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
-			fmt.Println("Metrics are successfully loaded..")
-		}
+	if *server.PsqlInfo != "" {
+		defer func() {
+			fmt.Println("Closing of db connection...")
+			fmt.Println("Db is nil? - ", server.DB != nil)
+			server.DB.Close()
+		}()
 	}
-	err := srv.ListenAndServe()
+	if *server.PsqlInfo == "" {
+		if *server.StartLoadMetric {
+			b, err := os.ReadFile(*server.FSPath)
+			if err == nil {
+				err = json.Unmarshal(b, server.OurStorage)
+				if err != nil {
+					fmt.Println("Reading unmarshal block:", err.Error())
+				} else {
+					fmt.Println("Metrics are successfully loaded..")
+				}
+			}
+		}
+		go Storage()
+	}
+	err = srv.ListenAndServe()
 	if err != http.ErrServerClosed {
 		log.Fatalf("HTTP server ListenAndServe: %v", err)
 	}

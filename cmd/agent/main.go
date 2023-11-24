@@ -2,19 +2,23 @@ package main
 
 import (
 	"fmt"
-	"github.com/akashipov/MetricCollector/internal/agent"
-	"github.com/go-resty/resty/v2"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
+
+	"github.com/akashipov/MetricCollector/internal/agent"
+	"github.com/go-resty/resty/v2"
 )
 
 func run() {
 	agent.ParseArgsClient()
+	client := resty.New()
+	client = client.SetTimeout(2 * time.Second)
 	a := agent.MetricSender{
 		URL:                fmt.Sprintf("http://%s", *agent.HPClient),
 		ListMetrics:        &agent.ListMetrics,
-		Client:             resty.New(),
+		Client:             client,
 		ReportIntervalTime: agent.ReportInterval,
 		PollIntervalTime:   agent.PollInterval,
 	}

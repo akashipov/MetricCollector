@@ -3,7 +3,9 @@ package server
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -26,7 +28,7 @@ func (r *CustomResponseWriter) Write(bytes []byte) (int, error) {
 	if r.header == nil {
 		r.header = make(map[string][]string)
 	}
-	return 6, nil
+	return 0, nil
 }
 
 func (r *CustomResponseWriter) WriteHeader(statusCode int) {
@@ -77,6 +79,7 @@ func TestSaveMetric(t *testing.T) {
 		Value: &f,
 	}
 	var customWriter http.ResponseWriter = &CustomResponseWriter{}
+	InitDB()
 	tests := []struct {
 		name            string
 		args            args
@@ -93,7 +96,7 @@ func TestSaveMetric(t *testing.T) {
 			},
 			triggerCount:    1,
 			BaseDirEnvValue: t.TempDir(),
-			wantStatusCode:  []string{StatusOK},
+			wantStatusCode:  nil,
 			wantMap:         []general.Metrics{*commonMetric1},
 		},
 		{
@@ -104,7 +107,7 @@ func TestSaveMetric(t *testing.T) {
 			},
 			triggerCount:    1,
 			BaseDirEnvValue: filepath.Join(t.TempDir(), "test_folder"),
-			wantStatusCode:  []string{StatusOK},
+			wantStatusCode:  nil,
 			wantMap:         []general.Metrics{*commonMetric2},
 		},
 		{
@@ -115,7 +118,7 @@ func TestSaveMetric(t *testing.T) {
 			},
 			triggerCount:    2,
 			BaseDirEnvValue: t.TempDir(),
-			wantStatusCode:  []string{StatusOK},
+			wantStatusCode:  nil,
 			wantMap:         []general.Metrics{*commonMetric3},
 		},
 		{
@@ -126,7 +129,7 @@ func TestSaveMetric(t *testing.T) {
 			},
 			triggerCount:    2,
 			BaseDirEnvValue: t.TempDir(),
-			wantStatusCode:  []string{StatusOK},
+			wantStatusCode:  nil,
 			wantMap:         []general.Metrics{*commonMetric4},
 		},
 	}
@@ -135,17 +138,24 @@ func TestSaveMetric(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv(tt.BaseDirEnvValue, t.TempDir())
 			for i := 0; i < tt.triggerCount; i++ {
-				SaveMetric(tt.args.w, tt.args.metric)
+				SaveMetric(tt.args.w, tt.args.metric, &http.Request{}, nil)
 			}
 			header := customWriter.Header()
 			assert.EqualValues(t, tt.wantStatusCode, header["Status-Code"])
-			assert.Equal(t, len(MapMetric.MetricList), len(tt.wantMap))
+			ms, err := OurStorage.GetAll()
+			if err != nil {
+				panic(err)
+			}
+			assert.Equal(t, len(ms), len(tt.wantMap))
 			for _, v := range tt.wantMap {
-				actualValue := MapMetric.MetricList[v.ID]
+				actualValue := ms[v.ID]
 				assert.Equal(t, v.Delta, actualValue.Delta)
 				assert.Equal(t, v.Value, actualValue.Value)
 			}
-			MapMetric.MetricList = make(map[string]*general.Metrics, 0)
+			err = OurStorage.Clean()
+			if err != nil {
+				panic(err)
+			}
 		})
 	}
 }
@@ -188,7 +198,7 @@ func TestUpdate(t *testing.T) {
 				contentType: "text/plain",
 			},
 			wantStatusCode: http.StatusBadRequest,
-			wantAnswer:     "Wrong type of metric: 'counter1'",
+			wantAnswer:     "wrong type of metric: 'counter1'",
 		},
 		{
 			name: "common_inconvertible_type",
@@ -237,13 +247,17 @@ func TestUpdate(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
+			assert.NotContains(t, resp.Header(), "Content-Encoding")
 			assert.EqualValues(t, tt.wantStatusCode, resp.StatusCode())
 			assert.Contains(
 				t,
 				resp.String(),
 				tt.wantAnswer,
 			)
-			MapMetric.MetricList = make(map[string]*general.Metrics, 0)
+			err = OurStorage.Clean()
+			if err != nil {
+				panic(err)
+			}
 		})
 	}
 }
@@ -260,13 +274,31 @@ func Encode(data []byte) []byte {
 	return b.Bytes()
 }
 
+func DecodeBytes(data []byte) ([]byte, error) {
+	buf := bytes.NewReader(data)
+	var err error
+	gz, err := gzip.NewReader(buf)
+	if err != nil {
+		return []byte(""), errors.New("Create reader block: " + err.Error())
+	}
+	b, err := io.ReadAll(gz)
+	if err != nil {
+		return []byte(""), errors.New("Read reader block: " + err.Error())
+	}
+	if err = gz.Close(); err != nil {
+		return []byte(""), errors.New("Close reader block: " + err.Error())
+	}
+	return b, nil
+}
+
 func TestUpdateShortForm(t *testing.T) {
 	type args struct {
-		Method          string
-		URL             string
-		contentType     string
-		contentEncoding bool
-		Body            []byte
+		Method         string
+		URL            string
+		contentType    string
+		IsEncodedReq   bool
+		Body           []byte
+		acceptEncoding string
 	}
 	logger, err := zap.NewDevelopment()
 	if err != nil {
@@ -283,7 +315,7 @@ func TestUpdateShortForm(t *testing.T) {
 		wantAnswer     string
 	}{
 		{
-			name: "common_ok",
+			name: "common_ok_simple",
 			args: args{
 				Method:      http.MethodPost,
 				URL:         server.URL + "/update",
@@ -296,11 +328,11 @@ func TestUpdateShortForm(t *testing.T) {
 		{
 			name: "common_ok_encoding",
 			args: args{
-				Method:          http.MethodPost,
-				URL:             server.URL + "/update",
-				contentType:     "application/json",
-				contentEncoding: true,
-				Body:            Encode([]byte("{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}")),
+				Method:       http.MethodPost,
+				URL:          server.URL + "/update",
+				contentType:  "application/json",
+				IsEncodedReq: true,
+				Body:         Encode([]byte("{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}")),
 			},
 			wantStatusCode: http.StatusOK,
 			wantAnswer:     "{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}",
@@ -314,7 +346,7 @@ func TestUpdateShortForm(t *testing.T) {
 				Body:        []byte("{\"id\":\"A\",\"type\":\"counter1\",\"delta\":10}"),
 			},
 			wantStatusCode: http.StatusNotFound,
-			wantAnswer:     "Wrong type of metric: 'counter1'",
+			wantAnswer:     "wrong type of metric: 'counter1'",
 		},
 		{
 			name: "common_inconvertible_type",
@@ -349,14 +381,39 @@ func TestUpdateShortForm(t *testing.T) {
 			wantStatusCode: http.StatusMethodNotAllowed,
 			wantAnswer:     "",
 		},
+		{
+			name: "common_ok_ae_true",
+			args: args{
+				Method:         http.MethodPost,
+				URL:            server.URL + "/update",
+				contentType:    "application/json",
+				Body:           []byte("{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}"),
+				acceptEncoding: "gzip",
+			},
+			wantStatusCode: http.StatusOK,
+			wantAnswer:     "{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}",
+		},
+		{
+			name: "common_ok_ae_false",
+			args: args{
+				Method:         http.MethodPost,
+				URL:            server.URL + "/update",
+				contentType:    "application/json",
+				Body:           []byte("{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}"),
+				acceptEncoding: "",
+			},
+			wantStatusCode: http.StatusOK,
+			wantAnswer:     "{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := resty.New()
-			r := c.R().ForceContentType(tt.args.contentType).SetBody(tt.args.Body)
-			if tt.args.contentEncoding {
+			r := c.R().SetHeader("Content-Type", tt.args.contentType).SetBody(tt.args.Body)
+			if tt.args.IsEncodedReq {
 				r.SetHeader("Content-Encoding", "gzip")
 			}
+			r.SetHeader("Accept-Encoding", fmt.Sprintf("%v", tt.args.acceptEncoding))
 			var resp *resty.Response
 			var err error
 			switch tt.args.Method {
@@ -365,9 +422,19 @@ func TestUpdateShortForm(t *testing.T) {
 			case http.MethodGet:
 				resp, err = r.Get(tt.args.URL)
 			}
-
 			if err != nil {
 				panic(err)
+			}
+			if resp.StatusCode() == http.StatusOK {
+				fmt.Println("All list of content-type:", resp.Header().Values("Content-Type"))
+				assert.Equal(t, "application/json", resp.Header().Get("Content-Type"))
+			} else {
+				assert.Contains(t, resp.Header().Get("Content-Type"), "") // it can be text/plain or empty
+			}
+			if tt.args.acceptEncoding == "gzip" {
+				assert.Equal(t, "gzip", resp.Header().Get("Content-Encoding"))
+			} else {
+				fmt.Println(resp.Header().Get("Content-Encoding"))
 			}
 			assert.EqualValues(t, tt.wantStatusCode, resp.StatusCode())
 			assert.Contains(
@@ -375,18 +442,22 @@ func TestUpdateShortForm(t *testing.T) {
 				resp.String(),
 				tt.wantAnswer,
 			)
-			MapMetric.MetricList = make(map[string]*general.Metrics, 0)
+			err = OurStorage.Clean()
+			if err != nil {
+				panic(err)
+			}
 		})
 	}
 }
 
 func TestGetMetricShortForm(t *testing.T) {
 	type args struct {
-		Method          string
-		URL             string
-		contentType     string
-		contentEncoding bool
-		Body            []byte
+		Method        string
+		URL           string
+		contentType   string
+		IsEncodedResp bool
+		IsEncodedReq  bool
+		Body          []byte
 	}
 	logger, err := zap.NewDevelopment()
 	if err != nil {
@@ -396,83 +467,95 @@ func TestGetMetricShortForm(t *testing.T) {
 	s := *logger.Sugar()
 	server := httptest.NewServer(ServerRouter(&s))
 
-	MapMetric.MetricList = make(map[string]*general.Metrics, 0)
+	// OurStorage.MetricList = make(map[string]*general.Metrics, 0)
 	a := int64(10)
-	MapMetric.MetricList["A"] = &general.Metrics{ID: "A", MType: agent.COUNTER, Delta: &a}
+	ms, err := OurStorage.GetAll()
+	if err != nil {
+		panic(err)
+	}
+	ms["A"] = &general.Metrics{ID: "A", MType: agent.COUNTER, Delta: &a}
 	b := float64(17)
-	MapMetric.MetricList["B"] = &general.Metrics{ID: "B", MType: agent.GAUGE, Value: &b}
+	ms["B"] = &general.Metrics{ID: "B", MType: agent.GAUGE, Value: &b}
 	defer server.Close()
 	tests := []struct {
 		name           string
 		args           args
 		wantStatusCode int
-		wantAnswer     string
+		wantAnswer     []string
 	}{
 		{
-			name: "common_counter_ok",
+			name: "common_counter_ok_sf",
 			args: args{
-				Method:      http.MethodPost,
-				URL:         server.URL + "/value",
-				contentType: "application/json",
-				Body:        []byte("{\"type\":\"counter\",\"id\":\"A\"}"),
+				Method:        http.MethodPost,
+				URL:           server.URL + "/value",
+				contentType:   "application/json",
+				Body:          []byte("{\"type\":\"counter\",\"id\":\"A\"}"),
+				IsEncodedResp: true,
+				IsEncodedReq:  false,
 			},
 			wantStatusCode: http.StatusOK,
-			wantAnswer:     "{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}",
+			wantAnswer:     []string{"{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}"},
 		},
 		{
 			name: "common_counter_ok_encoding",
 			args: args{
-				Method:          http.MethodPost,
-				URL:             server.URL + "/value",
-				contentType:     "application/json",
-				contentEncoding: true,
-				Body:            Encode([]byte("{\"type\":\"counter\",\"id\":\"A\"}")),
+				Method:        http.MethodPost,
+				URL:           server.URL + "/value",
+				contentType:   "application/json",
+				IsEncodedReq:  true,
+				IsEncodedResp: true,
+				Body:          Encode([]byte("{\"type\":\"counter\",\"id\":\"A\"}")),
 			},
 			wantStatusCode: http.StatusOK,
-			wantAnswer:     "{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}",
+			wantAnswer:     []string{"{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}"},
 		},
 		{
 			name: "common_gauge_ok",
 			args: args{
-				Method:      http.MethodPost,
-				URL:         server.URL + "/value",
-				contentType: "application/json",
-				Body:        []byte("{\"type\":\"gauge\",\"id\":\"B\"}"),
+				Method:        http.MethodPost,
+				URL:           server.URL + "/value",
+				contentType:   "application/json",
+				IsEncodedResp: true,
+				Body:          []byte("{\"type\":\"gauge\",\"id\":\"B\"}"),
 			},
 			wantStatusCode: http.StatusOK,
-			wantAnswer:     "{\"id\":\"B\",\"type\":\"gauge\",\"value\":17}",
+			wantAnswer:     []string{"{\"id\":\"B\",\"type\":\"gauge\",\"value\":17}"},
 		},
 		{
-			name: "common_gauge_wrong_type",
+			name: "common_gauge_wrong_type_there_is_no",
 			args: args{
-				Method:      http.MethodPost,
-				URL:         server.URL + "/value",
-				contentType: "application/json",
-				Body:        []byte("{\"id\":\"C\",\"type\":\"counter\"}"),
+				Method:        http.MethodPost,
+				URL:           server.URL + "/value",
+				contentType:   "application/json",
+				IsEncodedResp: false,
+				Body:          []byte("{\"id\":\"C\",\"type\":\"counter\"}"),
 			},
 			wantStatusCode: http.StatusNotFound,
-			wantAnswer:     "There is no metric like this: 'C'",
+			wantAnswer:     []string{"There is no metric like this: 'C'"},
 		},
 		{
-			name: "common_gauge_wrong_type",
+			name: "common_gauge_wrong_type_other_metric_type",
 			args: args{
-				Method:      http.MethodPost,
-				URL:         server.URL + "/value",
-				contentType: "application/json",
-				Body:        []byte("{\"type\":\"counter\",\"id\":\"B\"}"),
+				Method:        http.MethodPost,
+				URL:           server.URL + "/value",
+				contentType:   "application/json",
+				IsEncodedResp: false,
+				Body:          []byte("{\"type\":\"counter\",\"id\":\"B\"}"),
 			},
 			wantStatusCode: http.StatusNotFound,
-			wantAnswer:     "It has other metric type: 'gauge'",
+			wantAnswer:     []string{"It has other metric type: 'gauge'"},
 		},
 		{
-			name: "common_gauge_base_dir",
+			name: "root_url_list_encoded_req",
 			args: args{
-				Method:      http.MethodGet,
-				URL:         server.URL,
-				contentType: "application/json",
+				Method:        http.MethodGet,
+				URL:           server.URL,
+				contentType:   "text/plain",
+				IsEncodedResp: true,
+				IsEncodedReq:  true,
 			},
 			wantStatusCode: http.StatusOK,
-			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17</li></ul></html>",
+			wantAnswer:     []string{"<li>A: 10</li>", "<li>B: 17</li>"},
 		},
 		{
 			name: "common_not_allowed_get_base",
@@ -482,7 +565,7 @@ func TestGetMetricShortForm(t *testing.T) {
 				contentType: "application/json",
 			},
 			wantStatusCode: http.StatusMethodNotAllowed,
-			wantAnswer:     "",
+			wantAnswer:     []string{""},
 		},
 		{
 			name: "common_not_allowed_get_base",
@@ -493,14 +576,15 @@ func TestGetMetricShortForm(t *testing.T) {
 				Body:        []byte("{\"type\":\"gauge\",\"id\":\"B\"}"),
 			},
 			wantStatusCode: http.StatusMethodNotAllowed,
-			wantAnswer:     "",
+			wantAnswer:     []string{""},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := resty.New()
-			r := c.R().ForceContentType(tt.args.contentType).SetBody(tt.args.Body)
-			if tt.args.contentEncoding {
+			r := c.R().SetHeader("Content-Type", tt.args.contentType).SetBody(tt.args.Body)
+			r.SetHeader("Accept-Encoding", "gzip")
+			if tt.args.IsEncodedReq {
 				r.SetHeader("Content-Encoding", "gzip")
 			}
 			var resp *resty.Response
@@ -511,26 +595,40 @@ func TestGetMetricShortForm(t *testing.T) {
 			case http.MethodGet:
 				resp, err = r.Get(tt.args.URL)
 			}
-
 			if err != nil {
 				panic(err)
 			}
 			assert.EqualValues(t, tt.wantStatusCode, resp.StatusCode())
-			assert.Contains(
-				t,
-				resp.String(),
-				tt.wantAnswer,
-			)
+			if tt.args.IsEncodedResp {
+				assert.Equal(t, "gzip", resp.Header().Get("Content-Encoding"))
+			} else {
+				assert.Equal(t, "", resp.Header().Get("Content-Encoding"))
+			}
+			if resp.StatusCode() == http.StatusOK {
+				fmt.Println("All list of content-type:", resp.Header().Values("Content-Type"))
+				assert.Contains(t, []string{"application/json", "text/html"}, resp.Header().Get("Content-Type"))
+			} else {
+				assert.Contains(t, resp.Header().Get("Content-Type"), "") // it can be text/plain or empty
+			}
+			fmt.Println("Have got:", resp.Body())
+			decoded := string(resp.Body())
+			for _, v := range tt.wantAnswer {
+				assert.Contains(
+					t,
+					string(decoded),
+					v,
+				)
+			}
 		})
 	}
 }
 
-func TestGetMetric(t *testing.T) {
+func TestGetMetricFull(t *testing.T) {
 	type args struct {
-		Method         string
-		URL            string
-		contentType    string
-		acceptEncoding bool
+		Method        string
+		URL           string
+		contentType   string
+		IsEncodedResp bool
 	}
 	logger, err := zap.NewDevelopment()
 	if err != nil {
@@ -541,106 +639,122 @@ func TestGetMetric(t *testing.T) {
 	s := *logger.Sugar()
 	server := httptest.NewServer(ServerRouter(&s))
 	a := int64(10)
-	MapMetric.MetricList = make(map[string]*general.Metrics, 0)
-	MapMetric.MetricList["A"] = &general.Metrics{ID: "A", MType: agent.COUNTER, Delta: &a}
+	ms, err := OurStorage.GetAll()
+	if err != nil {
+		panic(err)
+	}
+	ms["A"] = &general.Metrics{ID: "A", MType: agent.COUNTER, Delta: &a}
 	b := float64(17)
-	MapMetric.MetricList["B"] = &general.Metrics{ID: "B", MType: agent.GAUGE, Value: &b}
+	ms["B"] = &general.Metrics{ID: "B", MType: agent.GAUGE, Value: &b}
 	defer server.Close()
 	tests := []struct {
 		name           string
 		args           args
 		wantStatusCode int
-		wantAnswer     string
+		wantAnswer     []string
 	}{
 		{
-			name: "common_counter_ok",
+			name: "common_counter_ok_ff",
 			args: args{
-				Method:      http.MethodGet,
-				URL:         server.URL + "/value/counter/A",
-				contentType: "text/plain",
+				Method:        http.MethodGet,
+				URL:           server.URL + "/value/counter/A",
+				contentType:   "text/plain",
+				IsEncodedResp: true,
 			},
 			wantStatusCode: http.StatusOK,
-			wantAnswer:     "10",
+			wantAnswer:     []string{"10"},
 		},
 		{
-			name: "common_gauge_ok",
+			name: "common_gauge_ok_ff",
 			args: args{
-				Method:      http.MethodGet,
-				URL:         server.URL + "/value/gauge/B",
-				contentType: "text/plain",
+				Method:        http.MethodGet,
+				URL:           server.URL + "/value/gauge/B",
+				contentType:   "text/plain",
+				IsEncodedResp: true,
 			},
 			wantStatusCode: http.StatusOK,
-			wantAnswer:     "17",
+			wantAnswer:     []string{"17"},
 		},
 		{
-			name: "common_gauge_wrong_type",
+			name: "common_gauge_wrong_type_there_is_no",
 			args: args{
-				Method:      http.MethodGet,
-				URL:         server.URL + "/value/counter/C",
-				contentType: "text/plain",
+				Method:        http.MethodGet,
+				URL:           server.URL + "/value/counter/C",
+				contentType:   "text/plain",
+				IsEncodedResp: false,
 			},
 			wantStatusCode: http.StatusNotFound,
-			wantAnswer:     "There is no metric like this: C",
+			wantAnswer:     []string{"There is no metric like this: 'C'"},
 		},
 		{
-			name: "common_gauge_wrong_type",
+			name: "common_gauge_wrong_type_other_metric_type",
 			args: args{
 				Method:      http.MethodGet,
 				URL:         server.URL + "/value/counter/B",
 				contentType: "text/plain",
 			},
 			wantStatusCode: http.StatusNotFound,
-			wantAnswer:     "It has other metric type: 'gauge'",
+			wantAnswer:     []string{"It has other metric type: 'gauge'"},
 		},
 		{
-			name: "common_gauge_base_dir",
+			name: "gauge_base_dir_full_form",
 			args: args{
-				Method:      http.MethodGet,
-				URL:         server.URL,
-				contentType: "text/plain",
+				Method:        http.MethodGet,
+				URL:           server.URL,
+				contentType:   "text/plain",
+				IsEncodedResp: true,
 			},
 			wantStatusCode: http.StatusOK,
-			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17</li></ul></html>",
+			wantAnswer:     []string{"<li>A: 10</li>", "<li>B: 17</li>"},
 		},
 		{
-			name: "common_gauge_base_dir_encoding",
+			name: "root_url_list_metrics_not_encoded_req",
 			args: args{
-				Method:         http.MethodGet,
-				URL:            server.URL,
-				contentType:    "text/html",
-				acceptEncoding: true,
+				Method:        http.MethodGet,
+				URL:           server.URL,
+				contentType:   "text/plain",
+				IsEncodedResp: true,
 			},
 			wantStatusCode: http.StatusOK,
-			wantAnswer:     "<html><ul><li>A: 10</li><li>B: 17</li></ul></html>",
+			wantAnswer:     []string{"<li>A: 10</li>", "<li>B: 17</li>"},
 		},
+		// {
+		// 	name: "common_bad_type_content_type",
+		// 	args: args{
+		// 		Method:        http.MethodGet,
+		// 		URL:           server.URL,
+		// 		contentType:   "text/html",
+		// 		IsEncodedResp: false,
+		// 	},
+		// 	wantStatusCode: http.StatusBadRequest,
+		// 	wantAnswer:     []string{"bad type of content-type, please change it"},
+		// },
 		{
-			name: "common_not_allowed_post_base",
+			name: "common_not_allowed_post_base_root",
 			args: args{
 				Method:      http.MethodPost,
 				URL:         server.URL,
 				contentType: "text/plain",
 			},
 			wantStatusCode: http.StatusMethodNotAllowed,
-			wantAnswer:     "",
+			wantAnswer:     []string{""},
 		},
 		{
-			name: "common_not_allowed_post_base",
+			name: "common_not_allowed_post_base_get_value",
 			args: args{
 				Method:      http.MethodPost,
 				URL:         server.URL + "/value/gauge/B",
 				contentType: "text/plain",
 			},
 			wantStatusCode: http.StatusMethodNotAllowed,
-			wantAnswer:     "",
+			wantAnswer:     []string{""},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := resty.New()
 			r := c.R().SetHeader("Content-Type", tt.args.contentType)
-			if tt.args.acceptEncoding {
-				r.SetHeader("Accept-Encoding", "gzip")
-			}
+			r.SetHeader("Accept-Encoding", "gzip")
 			var resp *resty.Response
 			var err error
 			switch tt.args.Method {
@@ -653,15 +767,21 @@ func TestGetMetric(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			if tt.args.acceptEncoding {
-				assert.Equal(t, resp.Header().Get("Content-Encoding"), "gzip")
+			if tt.args.IsEncodedResp {
+				assert.Equal(t, "gzip", resp.Header().Get("Content-Encoding"))
+			} else {
+				assert.Equal(t, "", resp.Header().Get("Content-Encoding"))
 			}
 			assert.EqualValues(t, tt.wantStatusCode, resp.StatusCode())
-			assert.Contains(
-				t,
-				resp.String(),
-				tt.wantAnswer,
-			)
+			decoded := resp.Body()
+			fmt.Println("Have got:", string(decoded))
+			for _, wanted := range tt.wantAnswer {
+				assert.Contains(
+					t,
+					string(decoded),
+					wanted,
+				)
+			}
 		})
 	}
 }

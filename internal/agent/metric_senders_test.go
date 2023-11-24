@@ -14,6 +14,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func GetHandler(s *string, t *testing.T) func(w http.ResponseWriter, request *http.Request) {
+	return func(w http.ResponseWriter, request *http.Request) {
+		var buf bytes.Buffer
+		buf.ReadFrom(request.Body)
+		var m []general.Metrics
+		err := json.Unmarshal(buf.Bytes(), &m)
+		if err != nil {
+			panic(err)
+		}
+		var v interface{}
+		for _, value := range m {
+			if value.Delta != nil {
+				v = *value.Delta
+			} else {
+				v = *value.Value
+			}
+			(*s) += fmt.Sprintf("id: '%v', type: '%v', value: '%v'||", value.ID, value.MType, v)
+		}
+		assert.Equal(t, "application/json", request.Header["Content-Type"][0])
+	}
+}
+
 func TestMetricSender_PollInterval(t *testing.T) {
 	type fields struct {
 		ListMetrics *[]string
@@ -35,20 +57,7 @@ func TestMetricSender_PollInterval(t *testing.T) {
 			fmt.Println("Mocking server...")
 			server := httptest.NewServer(
 				http.HandlerFunc(
-					func(w http.ResponseWriter, request *http.Request) {
-						var buf bytes.Buffer
-						buf.ReadFrom(request.Body)
-						var m general.Metrics
-						json.Unmarshal(buf.Bytes(), &m)
-						var v interface{}
-						if m.Delta != nil {
-							v = *m.Delta
-						} else {
-							v = *m.Value
-						}
-						s += fmt.Sprintf("id: '%v', type: '%v', value: '%v'||", m.ID, m.MType, v)
-						assert.Equal(t, "application/json", request.Header["Content-Type"][0])
-					},
+					GetHandler(&s, t),
 				),
 			)
 			defer server.Close()
@@ -77,7 +86,7 @@ func TestMetricSender_ReportInterval(t *testing.T) {
 	}
 	type args struct {
 		a             *runtime.MemStats
-		countOfUpdate int
+		countOfUpdate int64
 	}
 	tests := []struct {
 		name   string
@@ -107,20 +116,7 @@ func TestMetricSender_ReportInterval(t *testing.T) {
 			fmt.Println("Mocking server...")
 			server := httptest.NewServer(
 				http.HandlerFunc(
-					func(w http.ResponseWriter, request *http.Request) {
-						var buf bytes.Buffer
-						buf.ReadFrom(request.Body)
-						var m general.Metrics
-						json.Unmarshal(buf.Bytes(), &m)
-						var v interface{}
-						if m.Delta != nil {
-							v = *m.Delta
-						} else {
-							v = *m.Value
-						}
-						s += fmt.Sprintf("id: '%v', type: '%v', value: '%v'||", m.ID, m.MType, v)
-						assert.Equal(t, "application/json", request.Header["Content-Type"][0])
-					},
+					GetHandler(&s, t),
 				),
 			)
 			defer server.Close()

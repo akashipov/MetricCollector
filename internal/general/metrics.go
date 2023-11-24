@@ -1,10 +1,24 @@
 package general
 
+import (
+	"fmt"
+)
+
 type Metrics struct {
 	ID    string   `json:"id"`
 	MType string   `json:"type"`
 	Delta *int64   `json:"delta,omitempty"`
 	Value *float64 `json:"value,omitempty"`
+}
+
+func (m *Metrics) String() string {
+	switch m.MType {
+	case "gauge":
+		return fmt.Sprintf("ID: %s, value: %f\n", m.ID, *m.Value)
+	case "counter":
+		return fmt.Sprintf("ID: %s, delta: %d\n", m.ID, *m.Delta)
+	}
+	return ""
 }
 
 type Metric interface {
