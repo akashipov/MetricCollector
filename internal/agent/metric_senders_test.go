@@ -18,6 +18,7 @@ func TestMetricSender_PollInterval(t *testing.T) {
 	type fields struct {
 		ListMetrics *[]string
 	}
+	ParseArgsClient()
 	tests := []struct {
 		name   string
 		fields fields

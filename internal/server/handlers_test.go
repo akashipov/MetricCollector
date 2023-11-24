@@ -163,6 +163,7 @@ func TestUpdate(t *testing.T) {
 	defer logger.Sync()
 	s := *logger.Sugar()
 	server := httptest.NewServer(ServerRouter(&s))
+	ParseArgsServer()
 	defer server.Close()
 	tests := []struct {
 		name           string
