@@ -12,11 +12,13 @@ import (
 var HPClient *string
 var ReportInterval *int
 var PollInterval *int
+var AgentKey *string
 
 type ClientEnvConfig struct {
-	Address        string `env:"ADDRESS"`
-	ReportInterval int    `env:"REPORT_INTERVAL"`
-	PollInterval   int    `env:"POLL_INTERVAL"`
+	Address        *string `env:"ADDRESS"`
+	ReportInterval *int    `env:"REPORT_INTERVAL"`
+	PollInterval   *int    `env:"POLL_INTERVAL"`
+	KeyForHash     *string `env:"KEY"`
 }
 
 func ParseArgsClient() {
@@ -33,18 +35,24 @@ func ParseArgsClient() {
 	PollInterval = flag.Int(
 		"p", 2, "period of time in seconds, throw of it metrics will be updated from 'runtime'",
 	)
+	AgentKey = flag.String(
+		"k", "", "Key to hash requsts and check the sign from server",
+	)
 	flag.Parse()
-	if cfg.Address != "" {
+	if cfg.Address != nil {
 		sep := ":"
-		if !strings.Contains(cfg.Address, sep) {
+		if !strings.Contains(*cfg.Address, sep) {
 			panic(fmt.Errorf("ADDRESS should contain %s symbol to separate host and port", sep))
 		}
-		HPClient = &cfg.Address
+		HPClient = cfg.Address
 	}
-	if cfg.ReportInterval != 0 {
-		ReportInterval = &cfg.ReportInterval
+	if cfg.ReportInterval != nil {
+		ReportInterval = cfg.ReportInterval
 	}
-	if cfg.PollInterval != 0 {
-		PollInterval = &cfg.PollInterval
+	if cfg.PollInterval != nil {
+		PollInterval = cfg.PollInterval
+	}
+	if cfg.KeyForHash != nil {
+		AgentKey = cfg.KeyForHash
 	}
 }

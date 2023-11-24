@@ -8,6 +8,10 @@ import (
 	"runtime"
 	"time"
 
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+
 	"github.com/go-resty/resty/v2"
 )
 
@@ -95,6 +99,12 @@ func (r *MetricSender) SendMetric(value interface{}, metricType string, metricNa
 		return nil
 	}
 	req := r.Client.R().SetBody(s).SetHeader("Content-Type", "application/json")
+	if *AgentKey != "" {
+		encoder := hmac.New(sha256.New, []byte(*AgentKey))
+		encoder.Write([]byte(s))
+		v := encoder.Sum(nil)
+		req.SetHeader("HashSHA256", base64.RawURLEncoding.EncodeToString(v[:]))
+	}
 	resp, err := req.Post(
 		url,
 	)

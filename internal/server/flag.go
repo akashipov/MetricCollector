@@ -12,12 +12,14 @@ var HPServer *string
 var PTSave *int
 var FSPath *string
 var StartLoadMetric *bool
+var ServerKey *string
 
 type ServerEnvConfig struct {
 	Address         string  `env:"ADDRESS"`
 	StoreInterval   *int    `env:"STORE_INTERVAL"`
 	FileStoragePath *string `env:"FILE_STORAGE_PATH"`
 	StartLoadMetric *bool   `env:"RESTORE"`
+	KeyForHash      *string `env:"KEY"`
 }
 
 func ParseArgsServer() {
@@ -30,6 +32,7 @@ func ParseArgsServer() {
 	PTSave = flag.Int("i", 300, "interval to save metrics data to file in seconds")
 	FSPath = flag.String("f", "/tmp/metrics-db.json", "File storage path to json")
 	StartLoadMetric = flag.Bool("r", true, "Either load last metric checkpoint")
+	ServerKey = flag.String("k", "", "Key to create hash and check sign")
 	flag.Parse()
 	if cfg.Address != "" {
 		HPServer = &cfg.Address
@@ -42,6 +45,9 @@ func ParseArgsServer() {
 	}
 	if cfg.StartLoadMetric != nil {
 		StartLoadMetric = cfg.StartLoadMetric
+	}
+	if cfg.KeyForHash != nil {
+		ServerKey = cfg.KeyForHash
 	}
 	fmt.Println("StartLoadMetric:", *StartLoadMetric)
 	fmt.Println("Path for metrics file:", *FSPath)
