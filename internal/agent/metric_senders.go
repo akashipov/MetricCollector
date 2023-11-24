@@ -2,16 +2,19 @@ package agent
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
 	"runtime"
+	"syscall"
 	"time"
 
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 
+	"github.com/akashipov/MetricCollector/internal/general"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -63,7 +66,7 @@ type MetricSender struct {
 
 func (r *MetricSender) PollInterval(isTestMode bool) {
 	memInfo := runtime.MemStats{}
-	countOfUpdate := 0
+	countOfUpdate := int64(0)
 	tickerPollInterval := time.NewTicker(time.Duration(*r.PollIntervalTime) * time.Second)
 	defer tickerPollInterval.Stop()
 	tickerReportInterval := time.NewTicker(time.Duration(*r.ReportIntervalTime) * time.Second)
@@ -87,7 +90,6 @@ func (r *MetricSender) PollInterval(isTestMode bool) {
 
 func (r *MetricSender) SendMetric(value interface{}, metricType string, metricName string) error {
 	url := fmt.Sprintf("%s/update/", r.URL)
-	fmt.Println("Sending post request with url: " + url)
 	var s string
 	switch metricType {
 	case COUNTER:
@@ -95,8 +97,7 @@ func (r *MetricSender) SendMetric(value interface{}, metricType string, metricNa
 	case GAUGE:
 		s = fmt.Sprintf("{\"id\":\"%s\",\"type\":\"%s\",\"value\":%f}", metricName, metricType, value)
 	default:
-		fmt.Printf("Wrong type of metric: %v\n", metricType)
-		return nil
+		return fmt.Errorf("wrong type of metric: %v", metricType)
 	}
 	req := r.Client.R().SetBody(s).SetHeader("Content-Type", "application/json")
 	if *AgentKey != "" {
@@ -105,9 +106,15 @@ func (r *MetricSender) SendMetric(value interface{}, metricType string, metricNa
 		v := encoder.Sum(nil)
 		req.SetHeader("HashSHA256", base64.RawURLEncoding.EncodeToString(v[:]))
 	}
-	resp, err := req.Post(
-		url,
-	)
+	var err error
+	var resp *resty.Response
+	f := func() error {
+		resp, err = req.Post(
+			url,
+		)
+		return err
+	}
+	err = general.RetryCode(f, syscall.ECONNREFUSED)
 	if err != nil {
 		fmt.Printf("Request cannot be precossed, something is wrong: %s\n", err.Error())
 		return err
@@ -120,28 +127,74 @@ func (r *MetricSender) SendMetric(value interface{}, metricType string, metricNa
 	return nil
 }
 
-func (r *MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int) {
+func (r *MetricSender) SendMetrics(metrics []general.Metrics) error {
+	url := fmt.Sprintf("%s/updates/", r.URL)
+	fmt.Println("Sending post request with url: " + url)
+	var err error
+	s, err := json.Marshal(metrics)
+	if err != nil {
+		return err
+	}
+	req := r.Client.R().SetBody(s).SetHeader("Content-Type", "application/json")
+	if *AgentKey != "" {
+		encoder := hmac.New(sha256.New, []byte(*AgentKey))
+		encoder.Write([]byte(s))
+		v := encoder.Sum(nil)
+		req.SetHeader("HashSHA256", base64.RawURLEncoding.EncodeToString(v[:]))
+	}
+	var resp *resty.Response
+	f := func() error {
+		resp, err = req.Post(
+			url,
+		)
+		return err
+	}
+	err = general.RetryCode(f, syscall.ECONNREFUSED)
+	if err != nil {
+		err = fmt.Errorf("request cannot be precossed, something is wrong: %w", err)
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusCreated {
+		return fmt.Errorf("something wrong with resp - '%v', status code - %v", resp, resp.StatusCode())
+	}
+	fmt.Printf("Success: %v\n", resp.StatusCode())
+	return nil
+}
+
+func (r *MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int64) {
 	// Cast to map our all got metrics
 	b, _ := json.Marshal(a)
 	var m map[string]interface{}
 	_ = json.Unmarshal(b, &m)
+	metrics := make([]general.Metrics, 0)
 	var err error
 	for _, v := range *r.ListMetrics {
-		err = r.SendMetric(
-			m[v],
-			GAUGE,
-			v,
-		)
-		if err != nil {
-			return
+		casted, ok := m[v].(float64)
+		if ok {
+			metrics = append(
+				metrics,
+				general.Metrics{ID: v, MType: GAUGE, Value: &casted},
+			)
+		} else {
+			err = errors.Join(err, fmt.Errorf("cannot be cast to float64, wrong type for %s metric name", v))
 		}
 	}
-	err = r.SendMetric(countOfUpdate, COUNTER, "PollCount")
 	if err != nil {
+		fmt.Println(err.Error())
 		return
 	}
-	err = r.SendMetric(rand.Float64(), GAUGE, "RandomValue")
+	metrics = append(
+		metrics,
+		general.Metrics{ID: "PollCount", MType: COUNTER, Delta: &countOfUpdate},
+	)
+	c := rand.Float64()
+	metrics = append(
+		metrics,
+		general.Metrics{ID: "RandomValue", MType: GAUGE, Value: &c},
+	)
+	err = r.SendMetrics(metrics)
 	if err != nil {
+		fmt.Println(err.Error())
 		return
 	}
 	fmt.Println("All metrics successfully sent")

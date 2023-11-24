@@ -27,7 +27,7 @@ func ParseArgsClient() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	HPClient = flag.String("a", ":8080", "host and port in format <host>:<port>")
+	HPClient = flag.String("a", "localhost:8080", "host and port in format <host>:<port>")
 
 	ReportInterval = flag.Int(
 		"r", 10, "period of time in seconds, throw of it will be report to the server",
