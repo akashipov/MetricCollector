@@ -55,4 +55,6 @@ func ParseArgsClient() {
 	if cfg.KeyForHash != nil {
 		AgentKey = cfg.KeyForHash
 	}
+	fmt.Printf("PollInterval is %d seconds\n", *PollInterval)
+	fmt.Printf("ReportInterval is %d seconds\n", *ReportInterval)
 }

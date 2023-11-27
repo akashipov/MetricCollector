@@ -7,6 +7,8 @@ import (
 	"math/rand"
 	"net/http"
 	"runtime"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -62,28 +64,26 @@ type MetricSender struct {
 	Client             *resty.Client
 	ReportIntervalTime *int
 	PollIntervalTime   *int
+	M                  *sync.Mutex
+	Done               chan bool
 }
 
-func (r *MetricSender) PollInterval(isTestMode bool) {
-	memInfo := runtime.MemStats{}
-	countOfUpdate := int64(0)
+func (r *MetricSender) PollInterval(
+	memInfo *runtime.MemStats,
+	counter *atomic.Int64,
+) {
 	tickerPollInterval := time.NewTicker(time.Duration(*r.PollIntervalTime) * time.Second)
 	defer tickerPollInterval.Stop()
-	tickerReportInterval := time.NewTicker(time.Duration(*r.ReportIntervalTime) * time.Second)
-	defer tickerReportInterval.Stop()
 	for {
 		select {
 		case <-tickerPollInterval.C:
-			runtime.ReadMemStats(&memInfo)
-			countOfUpdate += 1
+			r.M.Lock()
+			runtime.ReadMemStats(memInfo)
+			r.M.Unlock()
+			counter.Add(1)
 			fmt.Println("Done PollInterval!")
-		case <-tickerReportInterval.C:
-			r.ReportInterval(&memInfo, countOfUpdate)
-			countOfUpdate = 0
-			fmt.Println("Done ReportInterval!")
-			if isTestMode {
-				return
-			}
+		case <-r.Done:
+			return
 		}
 	}
 }
@@ -161,8 +161,7 @@ func (r *MetricSender) SendMetrics(metrics []general.Metrics) error {
 	return nil
 }
 
-func (r *MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int64) {
-	// Cast to map our all got metrics
+func (r *MetricSender) ReportLogic(a *runtime.MemStats, countOfUpdate *atomic.Int64) {
 	b, _ := json.Marshal(a)
 	var m map[string]interface{}
 	_ = json.Unmarshal(b, &m)
@@ -183,9 +182,10 @@ func (r *MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int64) 
 		fmt.Println(err.Error())
 		return
 	}
+	delta := countOfUpdate.Load()
 	metrics = append(
 		metrics,
-		general.Metrics{ID: "PollCount", MType: COUNTER, Delta: &countOfUpdate},
+		general.Metrics{ID: "PollCount", MType: COUNTER, Delta: &delta},
 	)
 	c := rand.Float64()
 	metrics = append(
@@ -198,4 +198,24 @@ func (r *MetricSender) ReportInterval(a *runtime.MemStats, countOfUpdate int64) 
 		return
 	}
 	fmt.Println("All metrics successfully sent")
+}
+
+func (r *MetricSender) ReportInterval(
+	memInfo *runtime.MemStats,
+	countOfUpdate *atomic.Int64,
+) {
+	tickerReportInterval := time.NewTicker(time.Duration(*r.ReportIntervalTime) * time.Second)
+	defer tickerReportInterval.Stop()
+	for {
+		select {
+		case <-tickerReportInterval.C:
+			r.M.Lock()
+			r.ReportLogic(memInfo, countOfUpdate)
+			r.M.Unlock()
+			countOfUpdate.Swap(int64(0))
+			fmt.Println("Done ReportInterval!")
+		case <-r.Done:
+			return
+		}
+	}
 }

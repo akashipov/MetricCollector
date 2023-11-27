@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/akashipov/MetricCollector/internal/general"
 	"github.com/go-resty/resty/v2"
@@ -81,14 +84,23 @@ func TestMetricSender_PollInterval(t *testing.T) {
 			defer server.Close()
 			ReportIntervalTime := 1
 			PollIntervalTime := 1
+			var m sync.Mutex
+			done := make(chan bool)
 			r := MetricSender{
 				URL:                server.URL,
 				ListMetrics:        tt.fields.ListMetrics,
 				Client:             resty.New(),
 				ReportIntervalTime: &ReportIntervalTime,
 				PollIntervalTime:   &PollIntervalTime,
+				M:                  &m,
+				Done:               done,
 			}
-			r.PollInterval(true)
+			var countOfUpdate atomic.Int64
+			memStats := runtime.MemStats{}
+			go r.PollInterval(&memStats, &countOfUpdate)
+			go r.ReportInterval(&memStats, &countOfUpdate)
+			time.Sleep(time.Duration(*r.ReportIntervalTime)*time.Second + time.Millisecond*50)
+			close(done)
 			for _, v := range ListMetrics {
 				assert.Contains(t, s, fmt.Sprintf("id: '%s', type: 'gauge', value:", v))
 			}
@@ -127,7 +139,7 @@ func TestMetricSender_ReportInterval(t *testing.T) {
 					Sys:     544,
 					Lookups: 10,
 				},
-				countOfUpdate: 5,
+				countOfUpdate: int64(5),
 			},
 		},
 	}
@@ -143,14 +155,22 @@ func TestMetricSender_ReportInterval(t *testing.T) {
 			defer server.Close()
 			ReportIntervalTime := 1
 			PollIntervalTime := 1
+			done := make(chan bool)
+			var m sync.Mutex
 			r := MetricSender{
 				URL:                server.URL,
 				ListMetrics:        tt.fields.ListMetrics,
 				Client:             resty.New(),
 				ReportIntervalTime: &ReportIntervalTime,
 				PollIntervalTime:   &PollIntervalTime,
+				M:                  &m,
+				Done:               done,
 			}
-			r.ReportInterval(tt.args.a, tt.args.countOfUpdate)
+			var count atomic.Int64
+			count.Swap(tt.args.countOfUpdate)
+			go r.ReportInterval(tt.args.a, &count)
+			time.Sleep(time.Duration(*r.ReportIntervalTime)*time.Second + time.Millisecond*50)
+			close(done)
 			assert.Contains(t, s, "id: 'Alloc', type: 'gauge', value: '1245'")
 			assert.Contains(t, s, "id: 'Sys', type: 'gauge', value: '544'")
 			assert.Contains(t, s, "id: 'PollCount', type: 'counter', value: '5'")
