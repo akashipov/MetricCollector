@@ -95,8 +95,6 @@ func SaveMetric(
 	} else {
 		val = metric
 	}
-	fmt.Println("Have got")
-	fmt.Println(val.ID, val.MType)
 	OurStorage.Record(val, request, tx)
 	metric.Delta = val.Delta
 	metric.Value = val.Value

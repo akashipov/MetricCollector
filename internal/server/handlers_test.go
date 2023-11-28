@@ -741,7 +741,6 @@ func TestGetMetricShortForm(t *testing.T) {
 			} else {
 				assert.Contains(t, resp.Header().Get("Content-Type"), "") // it can be text/plain or empty
 			}
-			fmt.Println("Have got:", resp.Body())
 			decoded := string(resp.Body())
 			for _, v := range tt.wantAnswer {
 				assert.Contains(
@@ -905,7 +904,6 @@ func TestGetMetricFull(t *testing.T) {
 			}
 			assert.EqualValues(t, tt.wantStatusCode, resp.StatusCode())
 			decoded := resp.Body()
-			fmt.Println("Have got:", string(decoded))
 			for _, wanted := range tt.wantAnswer {
 				assert.Contains(
 					t,

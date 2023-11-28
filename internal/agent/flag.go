@@ -13,12 +13,14 @@ var HPClient *string
 var ReportInterval *int
 var PollInterval *int
 var AgentKey *string
+var RateLimit *int
 
 type ClientEnvConfig struct {
 	Address        *string `env:"ADDRESS"`
 	ReportInterval *int    `env:"REPORT_INTERVAL"`
 	PollInterval   *int    `env:"POLL_INTERVAL"`
 	KeyForHash     *string `env:"KEY"`
+	RateLimit      *int    `env:"RATE_LIMIT"`
 }
 
 func ParseArgsClient() {
@@ -38,6 +40,9 @@ func ParseArgsClient() {
 	AgentKey = flag.String(
 		"k", "", "Key to hash requsts and check the sign from server",
 	)
+	RateLimit = flag.Int(
+		"l", 1, "Limit of simulteniously sending of requests to server",
+	)
 	flag.Parse()
 	if cfg.Address != nil {
 		sep := ":"
@@ -55,6 +60,10 @@ func ParseArgsClient() {
 	if cfg.KeyForHash != nil {
 		AgentKey = cfg.KeyForHash
 	}
-	fmt.Printf("PollInterval is %d seconds\n", *PollInterval)
-	fmt.Printf("ReportInterval is %d seconds\n", *ReportInterval)
+	if cfg.RateLimit != nil {
+		RateLimit = cfg.RateLimit
+	}
+	fmt.Printf("Poll interval size is %d seconds\n", *PollInterval)
+	fmt.Printf("Report interval size is %d seconds\n", *ReportInterval)
+	fmt.Printf("Rate limit is %d\n", *RateLimit)
 }

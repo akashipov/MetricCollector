@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"runtime"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -19,30 +17,19 @@ func run(wg *sync.WaitGroup, done chan bool) {
 	client := resty.New()
 	client = client.SetTimeout(2 * time.Second)
 	var m sync.Mutex
-	a := agent.MetricSender{
+	goPull := make(chan struct{})
+	ms := agent.MetricSender{
 		URL:                fmt.Sprintf("http://%s", *agent.HPClient),
 		ListMetrics:        &agent.ListMetrics,
 		Client:             client,
 		ReportIntervalTime: agent.ReportInterval,
 		PollIntervalTime:   agent.PollInterval,
-		M:                  &m,
 		Done:               done,
+		M:                  &m,
+		GoPull:             goPull,
+		WG:                 wg,
 	}
-	memInfo := runtime.MemStats{}
-	var countOfUpdate atomic.Int64
-	wg.Add(1)
-	go func() {
-		fmt.Println("Has been started PollInterval")
-		a.PollInterval(&memInfo, &countOfUpdate, done)
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
-		fmt.Println("Has been started ReportInterval")
-		a.ReportInterval(false, &memInfo, &countOfUpdate, done)
-		wg.Done()
-	}()
-	wg.Done()
+	ms.Run()
 }
 
 func main() {

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -47,7 +46,9 @@ func TestMetricSender_PollInterval(t *testing.T) {
 	type fields struct {
 		ListMetrics *[]string
 	}
-	ParseArgsClient()
+	if AgentKey == nil {
+		ParseArgsClient()
+	}
 	tests := []struct {
 		name          string
 		fields        fields
@@ -82,30 +83,33 @@ func TestMetricSender_PollInterval(t *testing.T) {
 				),
 			)
 			defer server.Close()
-			ReportIntervalTime := 1
-			PollIntervalTime := 1
+			PullIntervalTime := 1
+			ReportIntervalTime := 2
 			var m sync.Mutex
 			done := make(chan bool)
+			goPull := make(chan struct{})
+			var wg sync.WaitGroup
 			r := MetricSender{
 				URL:                server.URL,
 				ListMetrics:        tt.fields.ListMetrics,
 				Client:             resty.New(),
-				ReportIntervalTime: &ReportIntervalTime,
-				PollIntervalTime:   &PollIntervalTime,
-				M:                  &m,
+				ReportIntervalTime: &PullIntervalTime,
+				PollIntervalTime:   &ReportIntervalTime,
 				Done:               done,
+				M:                  &m,
+				GoPull:             goPull,
+				WG:                 &wg,
 			}
-			var countOfUpdate atomic.Int64
-			memStats := runtime.MemStats{}
-			go r.PollInterval(&memStats, &countOfUpdate)
-			go r.ReportInterval(&memStats, &countOfUpdate)
-			time.Sleep(time.Duration(*r.ReportIntervalTime)*time.Second + time.Millisecond*50)
+			wg.Add(1)
+			go r.Run()
+			time.Sleep(time.Duration(*ReportInterval)*time.Second + time.Millisecond*500)
 			close(done)
+			wg.Wait()
 			for _, v := range ListMetrics {
 				assert.Contains(t, s, fmt.Sprintf("id: '%s', type: 'gauge', value:", v))
 			}
 			assert.Contains(t, s, "id: 'RandomValue', type: 'gauge', value:")
-			assert.Contains(t, s, "id: 'PollCount', type: 'counter', value: '1'")
+			assert.Contains(t, s, "id: 'PollCount', type: 'counter', value: '2'")
 			if tt.isHashed {
 				assert.Equal(t, s[len(s)-len("||Hashed"):], "||Hashed")
 			}
@@ -117,8 +121,11 @@ func TestMetricSender_ReportInterval(t *testing.T) {
 	type fields struct {
 		ListMetrics *[]string
 	}
+	if AgentKey == nil {
+		ParseArgsClient()
+	}
 	type args struct {
-		a             *runtime.MemStats
+		a             *map[string]interface{}
 		countOfUpdate int64
 	}
 	tests := []struct {
@@ -134,10 +141,10 @@ func TestMetricSender_ReportInterval(t *testing.T) {
 				},
 			},
 			args: args{
-				a: &runtime.MemStats{
-					Alloc:   1245,
-					Sys:     544,
-					Lookups: 10,
+				a: &map[string]interface{}{
+					"Alloc":   1245.0,
+					"Sys":     544.0,
+					"Lookups": 10.0,
 				},
 				countOfUpdate: int64(5),
 			},
@@ -156,6 +163,7 @@ func TestMetricSender_ReportInterval(t *testing.T) {
 			ReportIntervalTime := 1
 			PollIntervalTime := 1
 			done := make(chan bool)
+			goPull := make(chan struct{})
 			var m sync.Mutex
 			r := MetricSender{
 				URL:                server.URL,
@@ -163,8 +171,9 @@ func TestMetricSender_ReportInterval(t *testing.T) {
 				Client:             resty.New(),
 				ReportIntervalTime: &ReportIntervalTime,
 				PollIntervalTime:   &PollIntervalTime,
-				M:                  &m,
 				Done:               done,
+				M:                  &m,
+				GoPull:             goPull,
 			}
 			var count atomic.Int64
 			count.Swap(tt.args.countOfUpdate)
