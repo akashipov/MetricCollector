@@ -37,7 +37,7 @@ func GetHandler(s *string, t *testing.T) func(w http.ResponseWriter, request *ht
 		assert.Equal(t, "application/json", request.Header["Content-Type"][0])
 		hash := request.Header.Get("HashSHA256")
 		if hash != "" {
-			(*s) += fmt.Sprintf("Hashed")
+			(*s) += fmt.Sprint("Hashed")
 		}
 	}
 }
