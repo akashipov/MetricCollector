@@ -3,7 +3,10 @@ package server
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/hmac"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -50,7 +53,7 @@ func ServerRouter(s *zap.SugaredLogger) http.Handler {
 			r.Post("/", logger.WithLogging(http.HandlerFunc(GetMetricShortForm), s))
 		},
 	)
-	return GzipHandle(r)
+	return HashHandle(GzipHandle(r))
 }
 
 func Update(w http.ResponseWriter, request *http.Request) {
@@ -92,8 +95,6 @@ func SaveMetric(
 	} else {
 		val = metric
 	}
-	fmt.Println("Have got")
-	fmt.Println(val.ID, val.MType)
 	OurStorage.Record(val, request, tx)
 	metric.Delta = val.Delta
 	metric.Value = val.Value
@@ -383,6 +384,42 @@ func GzipHandle(next http.Handler) http.Handler {
 		defer gz.Close()
 
 		next.ServeHTTP(general.GzipWriter{OldW: w, Writer: gz}, r)
+	})
+}
+
+func HashHandle(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if *ServerKey != "" {
+			v := r.Header.Get("HashSHA256")
+			if v != "" {
+				var buf bytes.Buffer
+				_, err := buf.ReadFrom(r.Body)
+				if err != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					w.Write([]byte("Cannot read body bytes"))
+					return
+				}
+				decoder := hmac.New(sha256.New, []byte(*ServerKey))
+				decoder.Write(buf.Bytes())
+				encoded := decoder.Sum(nil)
+				if base64.RawURLEncoding.EncodeToString(encoded) == v {
+					fmt.Println("Sign checking have been passed")
+					r.Body.Close() //  must close
+					r.Body = io.NopCloser(bytes.NewBuffer(buf.Bytes()))
+					next.ServeHTTP(w, r)
+					return
+				} else {
+					w.WriteHeader(http.StatusBadRequest)
+					w.Write([]byte("Sign checking haven't been passed"))
+					return
+				}
+			} else {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("There is no HashSHA256 to check sign"))
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

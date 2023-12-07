@@ -3,6 +3,9 @@ package server
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -173,6 +176,7 @@ func TestUpdate(t *testing.T) {
 	defer logger.Sync()
 	s := *logger.Sugar()
 	server := httptest.NewServer(ServerRouter(&s))
+	ParseArgsServer()
 	defer server.Close()
 	tests := []struct {
 		name           string
@@ -289,6 +293,133 @@ func DecodeBytes(data []byte) ([]byte, error) {
 		return []byte(""), errors.New("Close reader block: " + err.Error())
 	}
 	return b, nil
+}
+
+func TestHashingWork(t *testing.T) {
+	type args struct {
+		URL            string
+		contentType    string
+		IsEncodedReq   bool
+		Body           []byte
+		acceptEncoding string
+		HashKeyServer  string
+		HashKeyRequest string
+	}
+	InitDB()
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	defer logger.Sync()
+	s := *logger.Sugar()
+	server := httptest.NewServer(ServerRouter(&s))
+	defer server.Close()
+	tests := []struct {
+		name           string
+		args           args
+		wantStatusCode int
+		wantAnswer     string
+	}{
+		{
+			name: "common_normal_case_without_hashing",
+			args: args{
+				URL:            server.URL + "/update",
+				contentType:    "application/json",
+				Body:           []byte("{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}"),
+				HashKeyServer:  "",
+				HashKeyRequest: "",
+			},
+			wantStatusCode: http.StatusOK,
+			wantAnswer:     "{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}",
+		},
+		{
+			name: "common_no_hashing_header",
+			args: args{
+				URL:            server.URL + "/update",
+				contentType:    "application/json",
+				Body:           []byte("{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}"),
+				HashKeyServer:  "blabla",
+				HashKeyRequest: "",
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantAnswer:     "There is no HashSHA256 to check sign",
+		},
+		{
+			name: "common_hashing_ok",
+			args: args{
+				URL:            server.URL + "/update",
+				contentType:    "application/json",
+				Body:           []byte("{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}"),
+				HashKeyServer:  "blabla",
+				HashKeyRequest: "blabla",
+			},
+			wantStatusCode: http.StatusOK,
+			wantAnswer:     "{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}",
+		},
+		{
+			name: "common_hashing_wrong_key",
+			args: args{
+				URL:            server.URL + "/update",
+				contentType:    "application/json",
+				Body:           []byte("{\"id\":\"A\",\"type\":\"counter\",\"delta\":10}"),
+				HashKeyServer:  "blabla",
+				HashKeyRequest: "blabla_extra_suffix",
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantAnswer:     "Sign checking haven't been passed",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ServerKey = &tt.args.HashKeyServer
+			defer func() {
+				s := ""
+				ServerKey = &s
+			}()
+			c := resty.New()
+			r := c.R().SetHeader("Content-Type", tt.args.contentType).SetBody(tt.args.Body)
+			if tt.args.IsEncodedReq {
+				r.SetHeader("Content-Encoding", "gzip")
+			}
+			r.SetHeader("Accept-Encoding", fmt.Sprintf("%v", tt.args.acceptEncoding))
+			if tt.args.HashKeyRequest != "" {
+				encoder := hmac.New(sha256.New, []byte(tt.args.HashKeyRequest))
+				encoder.Write([]byte(tt.args.Body))
+				v := encoder.Sum(nil)
+				r.SetHeader("HashSHA256", base64.RawURLEncoding.EncodeToString(v[:]))
+			}
+			var resp *resty.Response
+			var err error
+			resp, err = r.Post(tt.args.URL)
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			if resp.StatusCode() == http.StatusOK {
+				fmt.Println("All list of content-type:", resp.Header().Values("Content-Type"))
+				assert.Equal(t, "application/json", resp.Header().Get("Content-Type"))
+			} else {
+				assert.Contains(t, resp.Header().Get("Content-Type"), "") // it can be text/plain or empty
+			}
+			if tt.args.acceptEncoding == "gzip" {
+				assert.Equal(t, "gzip", resp.Header().Get("Content-Encoding"))
+			} else {
+				fmt.Println(resp.Header().Get("Content-Encoding"))
+			}
+			assert.EqualValues(t, tt.wantStatusCode, resp.StatusCode())
+			assert.Contains(
+				t,
+				resp.String(),
+				tt.wantAnswer,
+			)
+			err = OurStorage.Clean()
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+		})
+	}
 }
 
 func TestUpdateShortForm(t *testing.T) {
@@ -610,7 +741,6 @@ func TestGetMetricShortForm(t *testing.T) {
 			} else {
 				assert.Contains(t, resp.Header().Get("Content-Type"), "") // it can be text/plain or empty
 			}
-			fmt.Println("Have got:", resp.Body())
 			decoded := string(resp.Body())
 			for _, v := range tt.wantAnswer {
 				assert.Contains(
@@ -774,7 +904,6 @@ func TestGetMetricFull(t *testing.T) {
 			}
 			assert.EqualValues(t, tt.wantStatusCode, resp.StatusCode())
 			decoded := resp.Body()
-			fmt.Println("Have got:", string(decoded))
 			for _, wanted := range tt.wantAnswer {
 				assert.Contains(
 					t,

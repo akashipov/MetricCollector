@@ -12,6 +12,7 @@ var HPServer *string
 var PTSave *int
 var FSPath *string
 var StartLoadMetric *bool
+var ServerKey *string
 var PsqlInfo *string
 
 type ServerEnvConfig struct {
@@ -20,6 +21,7 @@ type ServerEnvConfig struct {
 	FileStoragePath    *string `env:"FILE_STORAGE_PATH"`
 	StartLoadMetric    *bool   `env:"RESTORE"`
 	ConnectionDBString *string `env:"DATABASE_DSN"`
+	KeyForHash         *string `env:"KEY"`
 }
 
 func ParseArgsServer() {
@@ -37,6 +39,7 @@ func ParseArgsServer() {
 		"Connection string for psql",
 	)
 	StartLoadMetric = flag.Bool("r", true, "Either load last metric checkpoint")
+	ServerKey = flag.String("k", "", "Key to create hash and check sign")
 	flag.Parse()
 	if cfg.Address != "" {
 		HPServer = &cfg.Address
@@ -49,6 +52,9 @@ func ParseArgsServer() {
 	}
 	if cfg.StartLoadMetric != nil {
 		StartLoadMetric = cfg.StartLoadMetric
+	}
+	if cfg.KeyForHash != nil {
+		ServerKey = cfg.KeyForHash
 	}
 	if cfg.ConnectionDBString != nil {
 		PsqlInfo = cfg.ConnectionDBString
